@@ -188,19 +188,20 @@ def plot_housekeeping(data):
     a.legend()
     return f,aa
 
-def find_last_cleaning(radsys = 'tower'):
+def find_last_cleaning(radsys = 'tower', base_path = '/Users/htelg/data/arm/datastream/bnf/'):
 # p2fld = pl.Path('/data/datastream/bnf/bnfradsys43m60sS10.b1/')
     if radsys == 'tower':
-        p2fld = pl.Path('/data/archive/bnf/bnfradsys43m60sS10.b1/')
+        p2fld = pl.Path(f'{base_path}') / 'bnfradsys43m60sS10.b1'
     elif radsys == 'ground':
-        p2fld = pl.Path('/data/archive/bnf/bnfradsys2m60sS10.b1/')
+        p2fld = pl.Path(f'{base_path}') / 'bnfradsys2m60sS10.b1'
     else:
         assert(False),'moooop'
     
     p2flist = list(p2fld.glob('*'))
     
     p2flist.sort(reverse=True)
-    
+
+    assert(len(p2flist) > 0), f'no files found in {p2fld}'
     for p2f in p2flist:
         ds = xr.open_dataset(p2f)
         if float(ds.clean_flag.sum()) > 0:
@@ -464,6 +465,7 @@ def plot_downwelling(data):
     a.legend(title = 'down short global', fontsize = 'small', loc = 1)
     now = pd.Timestamp.now()
     a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
+    a.set_ylabel('shortwave - global')
     
     a = aa[1]
     (ds_tower['inst_down_short_hemisp' if 'a' in data['stream'] else 'down_short_hemisp'] / ds_M1.down_short_hemisp).plot(ax = a, label = 'tower', marker = '.', ls = '', markersize = mz_ratio)
@@ -471,17 +473,20 @@ def plot_downwelling(data):
     
     a.set_ylim(0,2)
     a.axhline(1, color = 'black', ls = '--', alpha = 0.5)
+    a.set_ylabel('ratio')
     ####################
     # down short diffuse
     a = aa[2]
     ds_tower['inst_down_short_diffuse_hemisp_spn1' if 'a' in data['stream'] else 'down_short_diffuse_hemisp_spn1'].plot(ax = a, label = 'tower SPN1')
     ds_M1.down_short_diffuse_hemisp.plot(ax = a, label = 'M1', ls = '--')
     a.legend(title = 'down short diffuse', fontsize = 'small', loc = 1)
+    a.set_ylabel('shortwave - diffuse')
     
     a = aa[3]
     (ds_tower['inst_down_short_diffuse_hemisp_spn1' if 'a' in data['stream'] else 'down_short_diffuse_hemisp_spn1'] / ds_M1.down_short_diffuse_hemisp).plot(ax = a, marker = '.', ls = '', markersize = mz_ratio)
     a.set_ylim(0,2)
     a.axhline(1, color = 'black', ls = '--', alpha = 0.5)
+    a.set_ylabel('ratio')
     
     ####################
     # down short direct normal
@@ -496,23 +501,27 @@ def plot_downwelling(data):
     dst_m1 = ds_M1.down_short_hemisp - ds_M1.down_short_diffuse_hemisp
     dst_m1.plot(ax = a, label = 'M1', ls = '--')
     a.legend(title = 'down short direct h.', fontsize = 'small', loc = 1)
+    a.set_ylabel('shortwave - direct')
     
     a = aa[5]
     dst_m1 = ds_M1.down_short_hemisp - ds_M1.down_short_diffuse_hemisp
     (dst_m1/dst_tower).plot(ax = a, marker = '.', ls = '', markersize = mz_ratio)
     a.set_ylim(0,2)
     a.axhline(1, color = 'black', ls = '--', alpha = 0.5)
+    a.set_ylabel('ratio')
     ####################
     ## longwave
     a = aa[6]
     ds_tower['inst_down_long_hemisp' if 'a' in data['stream'] else 'down_long_hemisp'].plot(ax = a, label = 'tower')
     ds_M1.down_long_hemisp1.plot(ax = a, label = 'M1', ls = '--')
     a.legend(title = 'down long', fontsize = 'small', loc = 1)
+    a.set_ylabel('longwave')
     
     a = aa[7]
     (ds_tower['inst_down_long_hemisp' if 'a' in data['stream'] else 'down_long_hemisp'] / ds_M1.down_long_hemisp1).plot(ax = a, marker = '.', ls = '', markersize = mz_ratio)
     a.set_ylim(0,2)
     a.axhline(1, color = 'black', ls = '--', alpha = 0.5)
+    a.set_ylabel('ratio')
     #######################3
     now = pd.Timestamp.now()
     a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
