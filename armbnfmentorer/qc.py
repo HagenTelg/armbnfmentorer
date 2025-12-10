@@ -103,7 +103,7 @@ def get_file_availability(days = 7, stream = 'b1', base_path = '/Users/htelg/dat
     p2fld_M1 = base_path / 'bnfskyrad60sM1.b1'
     p2fld_M1g = base_path / 'bnfgndrad60sM1.b1'
     
-    end = pd.Timestamp.now().date()
+    end = pd.Timestamp.now(tz = 'UTC').date()
     start = end - pd.to_timedelta(days, 'd')
     
     # get list of files and sort
@@ -151,16 +151,23 @@ def plot_housekeeping(data):
         text = 'No ventilation data in b1 data!'
         a.text(0.5, 0.5, text, transform = a.transAxes, ha = 'center')
     a.set_ylim(4500, 5500)
+    a.set_ylabel('vent (rpm)')
     ##############################
     a = aa[1]
-    ds_tower.logger_volt_5v.plot(ax = a, label = 'tower-battery')
-    ds_tower.loggerps_bat.plot(ax = a, label = 'tower-supply')
-    ds_tower.granite_ps.plot(ax = a, label = 'tower-supply')
+    # ds_tower.logger_volt_5v.plot(ax = a, label = 'tower-battery')
+    ds_tower.loggerps_bat.plot(ax = a, label = 'logger battery')
+    ds_tower.granite_ps.plot(ax = a, label = 'granite voltage')
+    at = a.twinx()
+    ds_tower.logger_volt_5v.plot(ax = at, label = 'logger-voltage', color = 'red')
+
     # if 1:
     #     ds_ground_sel.logger_volt_5v.plot(ax = a, label = 'ground-battery')
     #     ds_ground_sel.loggerps_bat.plot(ax = a, label = 'ground-supply')
     #     ds_ground_sel.granite_ps.plot(ax = a, label = 'ground-supply')
     a.legend()
+    a.set_ylabel('voltage (V)')   
+    at.set_ylabel('voltage (V)')
+
     ##############################
     a = aa[2]
     ds_tower.logger_temp.plot(ax = a, label = 'tower-l-temp')
@@ -188,6 +195,31 @@ def plot_housekeeping(data):
     a.legend()
     return f,aa
 
+
+def plot_all_temperature_probes(dataa1):
+    tmpvars =  ['inst_down_short_hemisp_case_temp',
+                'inst_up_short_hemisp_case_temp',
+                'inst_down_long_hemisp_case_temp',
+                'inst_down_long_hemisp_dome_temp',
+                'inst_up_long_hemisp_case_temp',
+                'inst_up_long_hemisp_dome_temp',
+                # 'inst_temp', #this is in C the others in K
+               ]
+    tmpvars.sort()
+    
+    
+    f,aa =plt.subplots(2, gridspec_kw={'hspace': 0})
+    for e,i in enumerate(['tower', 'ground']):
+        a = aa[e]
+        ds = dataa1[i]
+        for var in tmpvars:
+            vara = var.replace('inst_', '').replace('_temp','')
+            ds[var].plot(ax = a, label = vara)
+        
+        a.legend(fontsize = 'x-small')
+        a.set_ylabel(f'{i} temps [K]')
+    return f,aa
+
 def find_last_cleaning(radsys = 'tower', base_path = '/Users/htelg/data/arm/datastream/bnf/'):
 # p2fld = pl.Path('/data/datastream/bnf/bnfradsys43m60sS10.b1/')
     if radsys == 'tower':
@@ -209,7 +241,7 @@ def find_last_cleaning(radsys = 'tower', base_path = '/Users/htelg/data/arm/data
     
     dtc = pd.to_datetime(p2f.name.split('.')[2])
     
-    td = (pd.Timestamp.now() - dtc)
+    td = (pd.Timestamp.now(tz = 'UTC') - dtc)
     
     td.days
     
@@ -240,7 +272,7 @@ def plot_spn1_vs_sr20(data):
     dst_tower_spn1 = ds_tower['inst_down_short_hemisp_spn1' if 'a' in data['stream'] else 'down_short_hemisp_spn1']
     dst_tower_spn1.plot(ax = a, label = 'SPN1', ls = '--', lw = 1)
     a.legend(title = 'tower', fontsize = 'small', loc = 1)
-    now = pd.Timestamp.now()
+    now = pd.Timestamp.now(tz = 'UTC')
     a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
     
     a = aa[1]
@@ -260,7 +292,7 @@ def plot_spn1_vs_sr20(data):
     dst_ground_spn1 = ds_ground['inst_down_short_hemisp_spn1' if 'a' in data['stream'] else 'down_short_hemisp_spn1']
     dst_ground_spn1.plot(ax = a, label = 'SPN1', ls = '--', lw = 1)
     a.legend(title = 'ground', fontsize = 'small', loc = 1)
-    now = pd.Timestamp.now()
+    now = pd.Timestamp.now(tz = 'UTC')
     a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
     
     a = aa[3]
@@ -280,7 +312,7 @@ def plot_spn1_vs_sr20(data):
     dst_ground_spn1 = ds_ground['inst_down_short_diffuse_hemisp_spn1' if 'a' in data['stream'] else 'down_short_diffuse_hemisp_spn1']
     dst_ground_spn1.plot(ax = a, label = 'SPN1 - diffuse', ls = '--', lw = 1)
     a.legend(title = 'ground', fontsize = 'small', loc = 1)
-    now = pd.Timestamp.now()
+    now = pd.Timestamp.now(tz = 'UTC')
     a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
     
     a = aa[5]
@@ -292,7 +324,7 @@ def plot_spn1_vs_sr20(data):
     
     a.set_ylabel('spn1/sr20')
     #######################3
-    now = pd.Timestamp.now()#p2fld_tower = pl.Path('/data/datastream/bnf/bnfradsys43mS10.a1/')
+    now = pd.Timestamp.now(tz = 'UTC')#p2fld_tower = pl.Path('/data/datastream/bnf/bnfradsys43mS10.a1/')
     
     a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
     return f,aa
@@ -316,7 +348,7 @@ def plot_is_data_comming_in(data):
     a.legend()
     ########
     ### shading
-    now = pd.Timestamp.now()
+    now = pd.Timestamp.now(tz = 'UTC')
     for a in aa:
         end = now.date()
         for e in range(days):
@@ -348,14 +380,14 @@ def plot_tower_vs_ground_down(data):
     ds_ground['inst_down_short_hemisp_spn1' if 'a' in data['stream'] else 'down_short_hemisp_spn1'].plot(ax = a, label = 'ground SPN1')
     
     a.legend(title = 'down short global', fontsize = 'small', loc = 1)
-    now = pd.Timestamp.now()
+    now = pd.Timestamp.now(tz = 'UTC')
     a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
     
     a = aa[1]
     (ds_tower['inst_down_short_hemisp' if 'a' in data['stream'] else 'down_short_hemisp'] / ds_ground['inst_down_short_hemisp' if 'a' in data['stream'] else 'down_short_hemisp']).plot(ax = a, label = 'tower', marker = '.', ls = '', markersize = mz_ratio)
     (ds_tower['inst_down_short_hemisp' if 'a' in data['stream'] else 'down_short_hemisp'] / ds_ground['inst_down_short_hemisp' if 'a' in data['stream'] else 'down_short_hemisp_spn1']).plot(ax = a, label = 'tower', marker = '.', ls = '', markersize = mz_ratio)
     
-    a.set_ylim(0,2)
+    a.set_ylim(0.8,2.8)
     a.axhline(1, color = 'black', ls = '--', alpha = 0.5)
     ####################
     # down short diffuse
@@ -366,7 +398,7 @@ def plot_tower_vs_ground_down(data):
     
     a = aa[3]
     (ds_tower['inst_down_short_diffuse_hemisp_spn1' if 'a' in data['stream'] else 'down_short_diffuse_hemisp_spn1'] / ds_ground['inst_down_short_diffuse_hemisp_spn1' if 'a' in data['stream'] else 'down_short_diffuse_hemisp_spn1']).plot(ax = a, marker = '.', ls = '', markersize = mz_ratio)
-    a.set_ylim(0,2)
+    a.set_ylim(0.8,2.6)
     a.axhline(1, color = 'black', ls = '--', alpha = 0.5)
     ####################
     # down short direct normal
@@ -393,7 +425,7 @@ def plot_tower_vs_ground_down(data):
     a.set_ylim(0,2)
     a.axhline(1, color = 'black', ls = '--', alpha = 0.5)
     #######################3
-    now = pd.Timestamp.now()
+    now = pd.Timestamp.now(tz = 'UTC')
     a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
     return f,aa
     
@@ -417,7 +449,7 @@ def plot_tower_vs_ground_up(data):
     dst_ground = ds_ground['inst_up_short_hemisp' if 'a' in data['stream'] else 'up_short_hemisp']
     dst_ground.plot(ax = a, label = 'ground', ls = '--', lw = 1)
     a.legend(title = 'up short global', fontsize = 'small', loc = 1)
-    now = pd.Timestamp.now()
+    now = pd.Timestamp.now(tz = 'UTC')
     a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
     
     a = aa[1]
@@ -441,7 +473,7 @@ def plot_tower_vs_ground_up(data):
     a.set_ylim(0.9,1.1)
     a.axhline(1, color = 'black', ls = '--', alpha = 0.5)
     #######################3
-    now = pd.Timestamp.now()
+    now = pd.Timestamp.now(tz = 'UTC')
     a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
     return f,aa
 
@@ -462,8 +494,8 @@ def plot_downwelling(data):
     ds_tower['inst_down_short_hemisp_spn1' if 'a' in data['stream'] else 'down_short_hemisp_spn1'].plot(ax = a, label = 'tower SPN1')
     
     ds_M1.down_short_hemisp.plot(ax = a, label = 'M1', ls = '--', lw = 1)
-    a.legend(title = 'down short global', fontsize = 'small', loc = 1)
-    now = pd.Timestamp.now()
+    a.legend(title = 'down short global', fontsize = 'small', loc = 2)
+    now = pd.Timestamp.now(tz = 'UTC')
     a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
     a.set_ylabel('shortwave - global')
     
@@ -479,7 +511,7 @@ def plot_downwelling(data):
     a = aa[2]
     ds_tower['inst_down_short_diffuse_hemisp_spn1' if 'a' in data['stream'] else 'down_short_diffuse_hemisp_spn1'].plot(ax = a, label = 'tower SPN1')
     ds_M1.down_short_diffuse_hemisp.plot(ax = a, label = 'M1', ls = '--')
-    a.legend(title = 'down short diffuse', fontsize = 'small', loc = 1)
+    a.legend(title = 'down short diffuse', fontsize = 'small', loc = 2)
     a.set_ylabel('shortwave - diffuse')
     
     a = aa[3]
@@ -500,7 +532,7 @@ def plot_downwelling(data):
         
     dst_m1 = ds_M1.down_short_hemisp - ds_M1.down_short_diffuse_hemisp
     dst_m1.plot(ax = a, label = 'M1', ls = '--')
-    a.legend(title = 'down short direct h.', fontsize = 'small', loc = 1)
+    a.legend(title = 'down short direct h.', fontsize = 'small', loc = 2)
     a.set_ylabel('shortwave - direct')
     
     a = aa[5]
@@ -514,7 +546,7 @@ def plot_downwelling(data):
     a = aa[6]
     ds_tower['inst_down_long_hemisp' if 'a' in data['stream'] else 'down_long_hemisp'].plot(ax = a, label = 'tower')
     ds_M1.down_long_hemisp1.plot(ax = a, label = 'M1', ls = '--')
-    a.legend(title = 'down long', fontsize = 'small', loc = 1)
+    a.legend(title = 'down long', fontsize = 'small', loc = 2)
     a.set_ylabel('longwave')
     
     a = aa[7]
@@ -523,14 +555,14 @@ def plot_downwelling(data):
     a.axhline(1, color = 'black', ls = '--', alpha = 0.5)
     a.set_ylabel('ratio')
     #######################3
-    now = pd.Timestamp.now()
+    now = pd.Timestamp.now(tz = 'UTC')
     a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
     
-    for e,a in enumerate(aa):
-        if e%2 == 1:
-            a.set_ylim(0.5, 1.5)
-        else:
-            leg = a.legend(loc = 2)
+    # for e,a in enumerate(aa):
+    #     if e%2 == 1:
+    #         a.set_ylim(0.5, 1.5)
+    #     else:
+    #         leg = a.legend(loc = 2)
         
     return f,aa
 
@@ -552,7 +584,7 @@ def plot_upwelling(data):
     
     ds_M1.up_short_hemisp.plot(ax = a, label = 'M1', ls = '--', lw = 1)
     a.legend(title = 'up short global', fontsize = 'small', loc = 1)
-    now = pd.Timestamp.now()
+    now = pd.Timestamp.now(tz = 'UTC')
     a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
     
     a = aa[1]
@@ -574,7 +606,7 @@ def plot_upwelling(data):
     a.set_ylim(0,2)
     a.axhline(1, color = 'black', ls = '--', alpha = 0.5)
     #######################3
-    now = pd.Timestamp.now()
+    now = pd.Timestamp.now(tz = 'UTC')
     a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
     return f,aa
 
@@ -613,7 +645,7 @@ def load_data(days = 7, start = None, end = None, stream = 'b1',
            # M1_up = ds_M1g,
           )
     if isinstance(start, type(None)):
-        start = pd.Timestamp.now() - pd.to_timedelta(days, 'd')
+        start = pd.Timestamp.now(tz = 'UTC') - pd.to_timedelta(days, 'd')
     else:
         if isinstance(end, type(None)):
             end = pd.to_datetime(start) + pd.to_timedelta(days, 'd')
