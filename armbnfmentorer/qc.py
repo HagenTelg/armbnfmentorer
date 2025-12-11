@@ -645,7 +645,7 @@ def load_data(days = 7, start = None, end = None, stream = 'b1',
            # M1_up = ds_M1g,
           )
     if isinstance(start, type(None)):
-        start = pd.Timestamp.now(tz = 'UTC') - pd.to_timedelta(days, 'd')
+        start = pd.Timestamp.now(tz = 'UTC').tz_localize(None) - pd.to_timedelta(days, 'd')
     else:
         if isinstance(end, type(None)):
             end = pd.to_datetime(start) + pd.to_timedelta(days, 'd')
