@@ -241,7 +241,7 @@ def find_last_cleaning(radsys = 'tower', base_path = '/Users/htelg/data/arm/data
     
     dtc = pd.to_datetime(p2f.name.split('.')[2])
     
-    td = (pd.Timestamp.now(tz = 'UTC') - dtc)
+    td = (pd.Timestamp.now(tz = 'UTC').tz_localize(None) - dtc)
     
     td.days
     
