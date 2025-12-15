@@ -13,7 +13,8 @@ def rsync_bnfradsys(user_remote: str = 'hagentelg', path2localfld: str = "/Users
                     path2remote: list = ["/data/datastream/bnf/bnfradsys*", 
                                          "/data/datastream/bnf/bnfskyrad60sM1.b1", 
                                          "/data/datastream/bnf/bnfgndrad60sM1.b1"
-                                         ]) -> None:
+                                         ],
+                    verbose = False) -> None:
     """
     Note, this requires an installed ssh key here and on the remote system.
     Syncing the radsys, skyrad, and ground rad data from the bnf server with your local machine (no change on server, just copy it over).
@@ -34,7 +35,8 @@ def rsync_bnfradsys(user_remote: str = 'hagentelg', path2localfld: str = "/Users
     #     f"{user_remote}@research.adc.arm.gov:/data/datastream/bnf/bnfgndrad60sM1.b1",
     # ]
     sources = [f"{user_remote}@research.adc.arm.gov:{p}" for p in path2remote]
-
+    if verbose:
+        print(f"running the rsync command: rsync -avz -e 'ssh' {' '.join(sources)} {str(local_dir)}")
     subprocess.run(
         [
             "rsync",
