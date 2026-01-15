@@ -568,6 +568,32 @@ def plot_downwelling(data):
         
     return f,aa
 
+
+def plot_shadowing_test(datab1):
+    ds = datab1['tower']
+    
+    start = pd.to_datetime(ds.time.values[0])
+    start = pd.to_datetime(start.date()) + pd.to_timedelta(6, 'h')
+    
+    f,aa = plt.subplots(3, sharex=True, gridspec_kw={'hspace': 0})
+    alpha = 0.8
+    while start < ds.time.values[-1]:
+        end = start + pd.to_timedelta(24, 'h')
+        dst = ds.sel(time = slice(start,end))
+        dt = pd.to_datetime(dst.time) - pd.to_datetime(start.date())
+        dst['dt'] = ('time', dt)
+        dst = dst.swap_dims({'time':'dt'})
+        a = aa[0]
+        dst.down_short_hemisp.plot(ax = a, label = start.date(), alpha = alpha)
+        a = aa[1]
+        dst.down_short_direct_hemisp.plot(ax = a, label = start.date(), alpha = alpha)
+        a = aa[2]
+        (dst.down_short_hemisp - dst.down_short_hemisp_spn1).plot(ax = a, label = start.date(), alpha = alpha)
+        start = end
+    a.legend()
+    return f,aa
+
+
 def plot_upwelling(data):
     ds_tower = data['tower']
     ds_ground = data['ground']
