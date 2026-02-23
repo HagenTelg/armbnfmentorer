@@ -22,3 +22,6 @@ dependencies = []
 
 [tool.hatch.build.targets.wheel]
 packages = ["armbnfmentorer"]
+
+[project.scripts]
+produce_surfrad_mfrsr_full = "armbnfmentorer.scripts.bnf_sync_and_vap:run"

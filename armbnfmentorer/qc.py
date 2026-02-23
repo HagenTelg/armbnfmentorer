@@ -131,6 +131,7 @@ def get_file_availability(days = 7, stream = 'b1', base_path = '/Users/htelg/dat
     return out
 
 def plot_housekeeping(data):
+    merge_M1_skyrad_grdrad(data) # ensures that skyrad and grdrad are merged into M1, needed for qclib
     ds_tower = data['tower']
     ds_ground = data['ground']
     ds_M1 = data['M1']
@@ -253,6 +254,7 @@ def find_last_cleaning(radsys = 'tower', base_path = '/Users/htelg/data/arm/data
     return ds
 
 def plot_spn1_vs_sr20(data):
+    merge_M1_skyrad_grdrad(data) # ensures that skyrad and grdrad are merged into M1, needed for qclib
     ds_tower = data['tower']
     ds_ground = data['ground']
     ds_M1 = data['M1']
@@ -332,6 +334,7 @@ def plot_spn1_vs_sr20(data):
     return f,aa
 
 def plot_is_data_comming_in(data):
+    merge_M1_skyrad_grdrad(data) # ensures that skyrad and grdrad are merged into M1, needed for qclib
     days = data['days']
     ds_tower = data['tower']
     f,aa = plt.subplots(3, sharex=True, gridspec_kw={'hspace': 0})
@@ -366,7 +369,7 @@ def plot_is_data_comming_in(data):
 def plot_tower_vs_ground_down(data):
     ds_tower = data['tower']
     ds_ground = data['ground']
-    ds_M1 = data['M1']
+    # ds_M1 = data['M1']
     stream = data['stream']
     days = data['days']
     f,aa = plt.subplots(8, sharex = True,height_ratios=[2,1,2,1,2,1,2,1], gridspec_kw={'hspace': 0})
@@ -432,9 +435,10 @@ def plot_tower_vs_ground_down(data):
     return f,aa
     
 def plot_tower_vs_ground_up(data):
+    merge_M1_skyrad_grdrad(data) # ensures that skyrad and grdrad are merged into M1, needed for qclib
     ds_tower = data['tower']
     ds_ground = data['ground']
-    ds_M1 = data['M1']
+    # ds_M1 = data['M1']
     stream = data['stream']
     days = data['days']
     f,aa = plt.subplots(4, sharex = True,height_ratios=[2,1,2,1,
@@ -480,6 +484,7 @@ def plot_tower_vs_ground_up(data):
     return f,aa
 
 def plot_downwelling(data):
+    merge_M1_skyrad_grdrad(data) # ensures that skyrad and grdrad are merged into M1, needed for qclib
     ds_tower = data['tower']
     ds_ground = data['ground']
     ds_M1 = data['M1']
@@ -593,8 +598,38 @@ def plot_shadowing_test(datab1):
     a.legend()
     return f,aa
 
+def merge_M1_skyrad_grdrad(data):   
+    if 'M1' in data:
+        return
+    ds_M1 = data['M1_skyrad']
+    ds_M1g = data['M1_grdrad']
+    ds = data['tower']
+    ds_M1 = xr.merge([ds_M1, ds_M1g], compat='override')
+    # often the time stemps are not identical -> interpolate 
+    ds_M1 = ds_M1.interp(time = ds.time).compute()
+    data['M1'] = ds_M1
+    return 
+
+def plot_upwelling_short_tower_vs_M1(data, ax = None):
+    merge_M1_skyrad_grdrad(data) # ensures that skyrad and grdrad are merged into M1, needed for qclib
+    if isinstance(ax, type(None)):
+        f,a = plt.subplots()
+    else:
+        a = ax
+        f = ax.figure
+
+    ds_tower = data['tower']
+    ds_M1 = data['M1']
+
+    ds_tower['inst_up_short_hemisp' if 'a' in ds_tower.data_level else 'up_short_hemisp'].plot(ax = a, label = 'tower')
+    ds_M1.up_short_hemisp.plot(ax = a, label = 'M1', ls = '--', lw = 1)
+    a.legend(title = 'up short global', fontsize = 'small', loc = 1)
+    return f,a
+
+
 
 def plot_upwelling(data):
+    merge_M1_skyrad_grdrad(data) # ensures that skyrad and grdrad are merged into M1, needed for qclib
     ds_tower = data['tower']
     ds_ground = data['ground']
     ds_M1 = data['M1']
@@ -607,14 +642,13 @@ def plot_upwelling(data):
     f.set_figwidth(f.get_figwidth() * 1.5)
     mz_ratio = 0.1
     ####################
+    # down short global
     a = aa[0]
-    ds_tower['inst_up_short_hemisp' if 'a' in data['stream'] else 'up_short_hemisp'].plot(ax = a, label = 'tower')
-    
-    ds_M1.up_short_hemisp.plot(ax = a, label = 'M1', ls = '--', lw = 1)
-    a.legend(title = 'up short global', fontsize = 'small', loc = 1)
+    plot_upwelling_short_tower_vs_M1(data, ax = a)
     now = pd.Timestamp.now(tz = 'UTC')
     a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
     
+    # 
     a = aa[1]
     (ds_tower['inst_up_short_hemisp' if 'a' in data['stream'] else 'up_short_hemisp'] / ds_M1.up_short_hemisp).plot(ax = a, label = 'tower', marker = '.', ls = '', markersize = mz_ratio)
     # (ds_tower.inst_down_short_hemisp_spn1 / ds_M1_itp.down_short_hemisp).plot(ax = a, label = 'tower', marker = '.', ls = '', markersize = mz_ratio)
@@ -710,10 +744,9 @@ def load_data(days = 7, start = None, end = None, stream = 'b1',
         files_M1g = p2fld2fileseries(p2fld_M1g)
         ds_M1 = xr.open_mfdataset(files_M1)
         ds_M1g = xr.open_mfdataset(files_M1g)
-        ds_M1 = xr.merge([ds_M1, ds_M1g], compat='override')
-        # often the time stemps are not identical -> interpolate 
-        ds_M1 = ds_M1.interp(time = ds.time).compute()
-        out['M1'] = ds_M1
+        out['M1_skyrad'] = ds_M1
+        out['M1_grdrad'] = ds_M1g
+
         
     # get list of files and sort
     # files_tower = sorted(p2fld_tower.glob('*.nc'), key=lambda f: '.'.join(f.name.split('.')[2:4]))
