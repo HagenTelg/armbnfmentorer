@@ -2,7 +2,7 @@
 import pandas as pd
 import xarray as xr
 import armbnfmentorer.vaps.bnfradsys43m60sS10c1 as vap
-import productomator.reporter as prolab
+import productomator.lab as prolab
 import armbnfmentorer.qc as bnfqc
 
 def run(path_in = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.b1/',#'/Users/htelg/data/arm/archive/bnf/bnfradsys43m60sS10.b1/'
