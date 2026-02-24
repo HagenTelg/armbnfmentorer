@@ -24,4 +24,4 @@ dependencies = []
 packages = ["armbnfmentorer"]
 
 [project.scripts]
-produce_surfrad_mfrsr_full = "armbnfmentorer.scripts.bnf_sync_and_vap:run"
+bnf_sync_and_vap = "armbnfmentorer.scripts.bnf_sync_and_vap:run"
