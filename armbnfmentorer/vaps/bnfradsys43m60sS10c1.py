@@ -123,6 +123,7 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
         ds = ds.rename({'global_horizontal':'down_short_hemisp',
                          'diffuse_horizontal': 'down_short_diffuse_hemisp',
                         'direct_horizontal': 'down_short_direct_hemisp',
+                        'direct_normal': 'down_short_direct_normal',
                         'datetime':'time'})        
         #########
         # Format the dataset attributes
