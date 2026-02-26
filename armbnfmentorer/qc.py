@@ -132,6 +132,59 @@ def get_file_availability(days = 7, stream = 'b1', base_path = '/Users/htelg/dat
     out = pd.concat(df_list, axis = 1)
     return out
 
+def plot_masked_clearsky(datac1, xlim_right_now = True):
+    ds_tower = datac1['tower']
+    
+    f,a = plt.subplots()
+    f.set_figwidth(f.get_figwidth() *1.5)
+    alpha = 0.4
+    lw = 1.5
+    lw2 = 1
+    g,=ds_tower.down_short_hemisp.plot(
+                                        # marker = '.', 
+                                        ls = '-', lw = lw2, 
+                                        # markersize = 3, 
+                                        alpha = alpha)
+    g.set_markeredgewidth(0)
+    col = g.get_color()
+    gg = g
+    
+    g, = ds_tower.down_short_hemisp.where(ds_tower.mask_clear_sky_shortwave_radflux).plot(lw = lw)
+    g.set_color(col)
+    ###
+    
+    g,=ds_tower.down_short_diffuse_hemisp.plot(
+                                        # marker = '.', 
+                                        ls = '-', lw = lw2,
+                                        # markersize = 3, 
+                                        alpha = alpha)
+    g.set_markeredgewidth(0)
+    col = g.get_color()
+    g, = ds_tower.down_short_diffuse_hemisp.where(ds_tower.mask_clear_sky_shortwave_radflux).plot(lw = lw)
+    g.set_color(col)
+    
+    ###
+    g,=ds_tower.down_short_direct_normal.plot(
+                                        # marker = '.', 
+                                        ls = '-', lw = lw2,
+                                        # markersize = 3, 
+                                        alpha = alpha)
+    g.set_markeredgewidth(0)
+    col = g.get_color()
+    g, = ds_tower.down_short_direct_normal.where(ds_tower.mask_clear_sky_shortwave_radflux).plot(lw = lw)
+    
+    g.set_color(col)
+    for dt in ds_tower.time.where(~ds_tower.mask_clear_sky_shortwave_radflux).dropna('time'):
+        a.axvline(dt.values, color = '0.2', zorder = 0, lw = 0.01)
+    
+    y = gg.get_ydata()
+    y = y[np.isfinite(y)]
+    pad = (y.max() - y.min()) * 0.05
+    a.set_ylim(y.min() - pad, y.max() + 4 * pad)
+    if xlim_right_now:
+        a.set_xlim(right = pd.Timestamp.now())
+    return f,a
+
 def plot_housekeeping(data):
     merge_M1_skyrad_grdrad(data) # ensures that skyrad and grdrad are merged into M1, needed for qclib
     ds_tower = data['tower']
@@ -678,6 +731,7 @@ def load_data(days = 7, start = None, end = None, stream = 'b1',
               include_M1 = True, include_radsys_tower = True, include_radsys_ground = True, 
               source = 'datastream', 
               base_path = '/Users/htelg/data/arm/', 
+              version = 'v0.1',
               verbose = False):
     """
     Parameters
@@ -690,12 +744,20 @@ def load_data(days = 7, start = None, end = None, stream = 'b1',
         End date, e.g. '2025-09-16'
     source: str, ['datastream', 'archive']
         What folder to use, the data
+    version: str
+        Version of the data, e.g. 'v0.1'. Only relevant for value added products (stream 'c1').
     base_path: str
         Base path to data folder. On arm servers this is /data/ 
     """
     def p2fld2fileseries(p2fld):
         sr = pd.Series(p2fld.glob('*.nc'))
-        sr.index = sr.apply(lambda row: pd.to_datetime(' '.join(row.name.split('.')[2:4])))
+        def extract_date_from_row(row):
+            nsplit = row.name.split('.')
+            if nsplit[-1] == 'nc':
+                return pd.to_datetime(nsplit[-2])
+            else:
+                return pd.to_datetime(' '.join(nsplit[2:4]))
+        sr.index = sr.apply(extract_date_from_row)
         sr.sort_index(inplace=True)
         sr = sr.truncate(start, end)
         return sr
@@ -720,6 +782,8 @@ def load_data(days = 7, start = None, end = None, stream = 'b1',
     elif stream == 'a1':
         p2fld_tower = pl.Path(f'{base_path}/{source}/bnf/bnfradsys43mS10.a1/')
         p2fld_ground = pl.Path(f'{base_path}/{source}/bnf/bnfradsys2mS10.a1/')
+    elif stream == 'c1':
+        p2fld_tower = pl.Path(f'{base_path}/bnfradsys43m60sS10.c1/{version}/')
     else:
         assert(False), f'stream not recognised. Is: "{stream}"'
     
@@ -739,7 +803,9 @@ def load_data(days = 7, start = None, end = None, stream = 'b1',
         out['ground'] = ds
     if include_radsys_tower:
         files_tower = p2fld2fileseries(p2fld_tower)
-        ds = xr.open_mfdataset(files_tower)
+        ds = xr.open_mfdataset(files_tower, 
+                               combine="nested",
+                               concat_dim="time",  )
         out['tower'] = ds
     if include_M1:
         files_M1 = p2fld2fileseries(p2fld_M1)
