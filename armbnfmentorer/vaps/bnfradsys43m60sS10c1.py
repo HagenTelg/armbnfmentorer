@@ -36,8 +36,9 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
         - clearsky mask according to radflux
        """
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
         self.version = '0.1'
+        kwargs['version'] = self.version
+        super().__init__(*args, **kwargs)
         self.site = atmsite.Station(
                 lat=34.3437276,
                 lon=-87.35044401,
@@ -52,6 +53,8 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
                 parent_network=None,
                 # **kwargs,
             )
+        self.combine_masterplan_duplicates()
+
     def process_row(self, row = None, iloc = None, loc = None):
         """This is the method that does the particular work and will need to be overwritten in your subclass.
         Typical components:
@@ -98,8 +101,11 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
         #######
         ## Open input files
         #######
-
-        ds = xr.open_dataset(row.p2f_in)
+        try:
+            ds = xr.open_dataset(row.p2f_in)
+        except:
+            print(row.p2f_in)
+            raise
 
         ds = ds.rename({'down_short_hemisp': 'global_horizontal',
                         'down_short_diffuse_hemisp': 'diffuse_horizontal',
@@ -108,6 +114,7 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
         self.tp_ds = ds.copy()
         ## Do some processing here, e.g. add attributes, format the dataset, etc.
         bbi = atmbrad.CombinedGlobalDiffuseDirect(ds, site= self.site, verbose = self.verbose)
+        bbi.direct_normal_irradiation #just to trigger the calculation of direct normal
         bbi.clearsky_parameters = clearsky_parameters
         bbi.optimize_clearsky_parameters()
         self.tp_bbi = bbi
@@ -148,6 +155,7 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
 
 
         ## Save the output file
+        row.p2f_out.parent.mkdir(parents=True, exist_ok=True)
         ds.to_netcdf(row.p2f_out)
         ds.close()
         return ds

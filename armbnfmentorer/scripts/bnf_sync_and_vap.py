@@ -1,3 +1,12 @@
+"""
+Requirements:
+- pvlib
+- xarray
+- pandas
+- netcdf4  
+- atmpy
+- productomator
+"""
 
 import pandas as pd
 import xarray as xr
@@ -8,13 +17,15 @@ import armbnfmentorer.qc as bnfqc
 def run(path_in = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.b1/',#'/Users/htelg/data/arm/archive/bnf/bnfradsys43m60sS10.b1/'
         path_out = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1/{version}/',#'/Users/htelg/data/arm/vap/bnfradsys43m60sS10.c1/{version}/'
         log_folder='/home/grad/htelg/.processlogs/',):
-
+    print('Starting BNF Sync and VAP process...')
+    print('====================================')
     reporter = prolab.Reporter('bnf_sync_and_vap', 
                             log_folder=log_folder,
                             reporting_frequency=(6, 'h'),
                             
                         )
-
+    print('Syncing files from remote server...')
+    print('====================================')
     bnfqc.rsync_bnfradsys(
                 user_remote= 'hagentelg',
                 path2localfld = '/nfs/stu3data2/bnf_radsys_data/',
@@ -30,9 +41,8 @@ def run(path_in = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.b1/',#'/Use
             end=None,
             reporter=reporter,
             verbose=True,)
-    
-    worker.process()
-
+#     worker.process_row(iloc=0)
+    worker.process(raise_errors = True)
     reporter.wrapup()
     return 
     

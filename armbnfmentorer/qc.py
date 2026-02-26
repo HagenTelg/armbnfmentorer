@@ -2,12 +2,14 @@ import subprocess
 import pathlib as pl
 import xarray as xr
 import pandas as pd
-import matplotlib.pyplot as plt
+from armbnfmentorer.optional_imports import matplotlib, IPython, PIL
+if matplotlib.module_available:
+    import matplotlib.pyplot as plt
 import numpy as np
 from tarfile import open as taropen
 from io import BytesIO
-from PIL import Image
-from IPython.display import display
+# from PIL import Image
+# from IPython.display import display
 
 def rsync_bnfradsys(user_remote: str = 'hagentelg', path2localfld: str = "/Users/htelg/data/arm/datastream/bnf",
                     path2remote: list = ["/data/datastream/bnf/bnfradsys*", 
@@ -65,8 +67,8 @@ def show_image_from_tar(tar_path, member_name=None):
         fobj = tf.extractfile(member_name)  # file-like object
         if fobj is None:
             raise FileNotFoundError(f"Could not open {member_name} from tar.")
-        img = Image.open(BytesIO(fobj.read()))
-        display(img)
+        img = PIL.Image.open(BytesIO(fobj.read()))
+        IPython.display(img)
         
 def get_file_availability(days = 7, stream = 'b1', base_path = '/Users/htelg/data/arm/datastream/bnf/',
               include_M1 = False, verbose = False,
