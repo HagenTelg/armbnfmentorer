@@ -52,6 +52,15 @@ def rsync_bnfradsys(user_remote: str = 'hagentelg', path2localfld: str = "/Users
 
 
 def show_image_from_tar(tar_path, member_name=None):
+    """This is designed to show images from the allsky camera tar files. It requires you to be on the ARM server, e.g. 
+     via the jupyter-hub or you need to download all the data
+     
+     Parameters
+     ----------
+     tar_path : str
+         Path to the tar file containing the images. E.g. '/data/archive/bnf/bnfasiskyimageS10.a1/bnfasiskyimageS10.a1.20250521.000000.jpg.tar'
+     member_name : str, optional
+         Specific member (image) to show from the tar file. If None, the first image found will be displayed. Default is None."""
     with taropen(tar_path, mode="r:*") as tf:
         # pick a member if not given (first JPG/PNG found)
         if member_name is None:
@@ -69,6 +78,7 @@ def show_image_from_tar(tar_path, member_name=None):
             raise FileNotFoundError(f"Could not open {member_name} from tar.")
         img = PIL.Image.open(BytesIO(fobj.read()))
         IPython.display(img)
+        
         
 def get_file_availability(days = 7, stream = 'b1', base_path = '/Users/htelg/data/arm/datastream/bnf/',
               include_M1 = False, verbose = False,
@@ -753,7 +763,7 @@ def load_data(days = 7, start = None, end = None, stream = 'b1',
         sr = pd.Series(p2fld.glob('*.nc'))
         def extract_date_from_row(row):
             nsplit = row.name.split('.')
-            if nsplit[-1] == 'nc':
+            if nsplit[1] == 'c1':
                 return pd.to_datetime(nsplit[-2])
             else:
                 return pd.to_datetime(' '.join(nsplit[2:4]))
