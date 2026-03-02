@@ -35,7 +35,8 @@ def run(log_folder='/home/grad/htelg/.processlogs/',):
 def run2(path_in = '/nfs/stu3data2/bnf_radsys_data/bnfradsys2m60sS10.b1/',#'/Users/htelg/data/arm/archive/bnf/bnfradsys43m60sS10.b1/'
         path_out = '/nfs/stu3data2/bnf_radsys_data/bnfradsys2m60sS10.c1/{version}/',#'/Users/htelg/data/arm/vap/bnfradsys43m60sS10.c1/{version}/'
         reporter = None,):
-
+    print('Processing BNF Radsys 2m60sS10...')
+    print('====================================')
     worker = vap.BnfRadsys2m60sS10C1(
             path_in,
             path_out,
@@ -54,6 +55,8 @@ def run2(path_in = '/nfs/stu3data2/bnf_radsys_data/bnfradsys2m60sS10.b1/',#'/Use
 def run43(path_in = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.b1/',#'/Users/htelg/data/arm/archive/bnf/bnfradsys43m60sS10.b1/'
         path_out = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1/{version}/',#'/Users/htelg/data/arm/vap/bnfradsys43m60sS10.c1/{version}/'
         reporter = None,):
+    print('Processing BNF Radsys 43m60sS10...')
+    print('====================================')
     worker = vap.BnfRadsys43m60sS10C1(
             path_in,
             path_out,
