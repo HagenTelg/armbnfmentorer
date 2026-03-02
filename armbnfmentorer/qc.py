@@ -2,7 +2,7 @@ import subprocess
 import pathlib as pl
 import xarray as xr
 import pandas as pd
-from armbnfmentorer.optional_imports import matplotlib, IPython, PIL
+from armbnfmentorer.optional_imports import matplotlib, IPython, PIL, OptionalImport
 if matplotlib.module_available:
     import matplotlib.pyplot as plt
 import numpy as np
@@ -10,6 +10,7 @@ from tarfile import open as taropen
 from io import BytesIO
 # from PIL import Image
 # from IPython.display import display
+ipywidgets = OptionalImport("ipywidgets")
 
 def rsync_bnfradsys(user_remote: str = 'hagentelg', path2localfld: str = "/Users/htelg/data/arm/datastream/bnf",
                     path2remote: list = ["/data/datastream/bnf/bnfradsys*", 
@@ -50,8 +51,7 @@ def rsync_bnfradsys(user_remote: str = 'hagentelg', path2localfld: str = "/Users
         check=True,
     )
 
-
-def show_image_from_tar(tar_path, member_name=None):
+def show_image_from_tar(tar_path, member_name=None, interactive=True):
     """This is designed to show images from the allsky camera tar files. It requires you to be on the ARM server, e.g. 
      via the jupyter-hub or you need to download all the data
      
@@ -60,25 +60,90 @@ def show_image_from_tar(tar_path, member_name=None):
      tar_path : str
          Path to the tar file containing the images. E.g. '/data/archive/bnf/bnfasiskyimageS10.a1/bnfasiskyimageS10.a1.20250521.000000.jpg.tar'
      member_name : str, optional
-         Specific member (image) to show from the tar file. If None, the first image found will be displayed. Default is None."""
-    with taropen(tar_path, mode="r:*") as tf:
-        # pick a member if not given (first JPG/PNG found)
-        if member_name is None:
-            print('choose from list below')
-            print('======================')
-            for m in tf.getmembers():
-                if m.isfile() and (m.name.lower().endswith((".jpg", ".jpeg", ".png", ".tif", ".tiff"))):
-                    member_name = m.name
-                    print(member_name)
-            else:
-                raise FileNotFoundError("No image file found in the tar.")
-            return None
-        fobj = tf.extractfile(member_name)  # file-like object
+         Specific member (image) to show from the tar file. If None, a Jupyter widget
+         with previous/next arrows and a dropdown selector is shown when available.
+     interactive : bool, optional
+         If True and member_name is None, show interactive controls in Jupyter Lab.
+         Default is True.
+     """
+    tf = taropen(tar_path, mode="r:*")
+    image_members = [
+        m.name
+        for m in tf.getmembers()
+        if m.isfile() and m.name.lower().endswith((".jpg", ".jpeg", ".png", ".tif", ".tiff"))
+    ]
+    if not image_members:
+        tf.close()
+        raise FileNotFoundError("No image file found in the tar.")
+
+    image_cache = {}
+
+    def _load_image(name):
+        if name in image_cache:
+            return image_cache[name]
+        fobj = tf.extractfile(name)
         if fobj is None:
-            raise FileNotFoundError(f"Could not open {member_name} from tar.")
+            raise FileNotFoundError(f"Could not open {name} from tar.")
         img = PIL.Image.open(BytesIO(fobj.read()))
-        IPython.display(img)
-        
+        image_cache[name] = img
+        return img
+
+    def _display_image(name):
+        img = _load_image(name)
+        IPython.display.display(img)
+
+    if member_name is not None:
+        if member_name not in image_members:
+            tf.close()
+            raise FileNotFoundError(f"{member_name} not found in tar image list.")
+        _display_image(member_name)
+        tf.close()
+        return member_name
+
+    if not (interactive and ipywidgets.module_available and IPython.module_available):
+        print("choose from list below")
+        print("======================")
+        for name in image_members:
+            print(name)
+        _display_image(image_members[0])
+        tf.close()
+        return image_members[0]
+
+    widgets = ipywidgets
+    dropdown = widgets.Dropdown(
+        options=image_members,
+        value=image_members[0],
+        description="Image:",
+        layout=widgets.Layout(width="85%"),
+    )
+    button_prev = widgets.Button(description="◀", tooltip="Previous image", layout=widgets.Layout(width="42px"))
+    button_next = widgets.Button(description="▶", tooltip="Next image", layout=widgets.Layout(width="42px"))
+    output = widgets.Output()
+
+    def _render(name):
+        with output:
+            output.clear_output(wait=True)
+            _display_image(name)
+
+    def _move(step):
+        idx = image_members.index(dropdown.value) + step
+        idx = max(0, min(idx, len(image_members) - 1))
+        dropdown.value = image_members[idx]
+
+    def _on_dropdown_change(change):
+        if change["name"] == "value" and change["type"] == "change":
+            _render(change["new"])
+
+    button_prev.on_click(lambda _: _move(-1))
+    button_next.on_click(lambda _: _move(1))
+    dropdown.observe(_on_dropdown_change, names="value")
+
+    IPython.display.display(widgets.HBox([button_prev, button_next, dropdown]), output)
+    _render(dropdown.value)
+
+    # Return handles so callers can keep state alive and close tar explicitly when done.
+    return {"tar": tf, "dropdown": dropdown, "prev": button_prev, "next": button_next, "output": output}
+
         
 def get_file_availability(days = 7, stream = 'b1', base_path = '/Users/htelg/data/arm/datastream/bnf/',
               include_M1 = False, verbose = False,
