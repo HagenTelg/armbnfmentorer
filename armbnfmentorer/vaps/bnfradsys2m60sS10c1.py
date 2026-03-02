@@ -122,7 +122,8 @@ class BnfRadsys2m60sS10C1(prowo.Workplanner):
         ########
         # Format the dataset
         ########
-        dropvar = ['lat', 'lon', 'alt', 'zenith_geometric', 'apparent_elevation', 'elevation', 'equation_of_time', 'mu0',
+        dropvar = ['lat', 'lon', 'alt', 'zenith_geometric', 'apparent_elevation', 'elevation', 'equation_of_time', 
+                #    'mu0',
                 # '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
                 ]
         
