@@ -260,6 +260,22 @@ def plot_masked_clearsky(datac1, xlim_right_now = True):
         a.set_xlim(right = pd.Timestamp.now())
     return f,a
 
+def plot_clearsky_masks(datac1):
+    ds = datac1['tower']
+    
+    f,a = plt.subplots()
+    masks = [
+            'mask_clear_sky_shortwave_radflux',
+            'mask_normalized_global_magnitude',
+            'mask_diffuse_magnitude',
+            'mask_global_irradiance_variability',
+            'mask_normalized_diffuse_ratio_variability',
+    ]
+    for e,m in enumerate(masks):
+        (ds[m] + e * 0.1).plot(label = m)
+    a.legend(fontsize = 'xx-small')
+    return f,a
+
 def plot_housekeeping(data):
     merge_M1_skyrad_grdrad(data) # ensures that skyrad and grdrad are merged into M1, needed for qclib
     ds_tower = data['tower']
