@@ -16,7 +16,7 @@ import productomator.lab as prolab
 import armbnfmentorer.qc as bnfqc
 
 def run(log_folder='/home/grad/htelg/.processlogs/',
-        sync_files = False,):
+        sync_files = True,):
     
     print('Starting BNF Sync and VAP process...')
     print('====================================')
@@ -38,7 +38,8 @@ def run(log_folder='/home/grad/htelg/.processlogs/',
 def run2(path_in = '/nfs/stu3data2/bnf_radsys_data/bnfradsys2m60sS10.b1/',#'/Users/htelg/data/arm/archive/bnf/bnfradsys43m60sS10.b1/'
         path_out = '/nfs/stu3data2/bnf_radsys_data/bnfradsys2m60sS10.c1/{version}/',#'/Users/htelg/data/arm/vap/bnfradsys43m60sS10.c1/{version}/'
         reporter = None,):
-
+    print('Processing bnfradsys2m60sS10...')
+    print('====================================')
     worker = vap2.BnfRadsys2m60sS10C1(
             path_in,
             path_out,
@@ -56,6 +57,8 @@ def run2(path_in = '/nfs/stu3data2/bnf_radsys_data/bnfradsys2m60sS10.b1/',#'/Use
 def run43(path_in = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.b1/',#'/Users/htelg/data/arm/archive/bnf/bnfradsys43m60sS10.b1/'
         path_out = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1/{version}/',#'/Users/htelg/data/arm/vap/bnfradsys43m60sS10.c1/{version}/'
         reporter = None,):
+    print('Processing bnfradsys43m60sS10...')
+    print('====================================')
     worker = vap43.BnfRadsys43m60sS10C1(
             path_in,
             path_out,

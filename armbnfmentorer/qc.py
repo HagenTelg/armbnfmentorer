@@ -12,7 +12,9 @@ from io import BytesIO
 # from IPython.display import display
 ipywidgets = OptionalImport("ipywidgets")
 
-def rsync_bnfradsys(user_remote: str = 'hagentelg', path2localfld: str = "/Users/htelg/data/arm/datastream/bnf",
+def rsync_bnfradsys(server: str = 'research.adc.arm.gov',
+                    user_remote: str = 'hagentelg', 
+                    path2localfld: str = "/Users/htelg/data/arm/datastream/bnf",
                     path2remote: list = ["/data/datastream/bnf/bnfradsys*", 
                                          "/data/datastream/bnf/bnfskyrad60sM1.b1", 
                                          "/data/datastream/bnf/bnfgndrad60sM1.b1"
@@ -37,7 +39,7 @@ def rsync_bnfradsys(user_remote: str = 'hagentelg', path2localfld: str = "/Users
     #     f"{user_remote}@research.adc.arm.gov:/data/datastream/bnf/bnfskyrad60sM1.b1",
     #     f"{user_remote}@research.adc.arm.gov:/data/datastream/bnf/bnfgndrad60sM1.b1",
     # ]
-    sources = [f"{user_remote}@research.adc.arm.gov:{p}" for p in path2remote]
+    sources = [f"{user_remote}@{server}:{p}" for p in path2remote]
     if verbose:
         print(f"running the rsync command: rsync -avz -e 'ssh' {' '.join(sources)} {str(local_dir)}")
     subprocess.run(
@@ -819,10 +821,13 @@ def plot_upwelling(data):
     return f,aa
 
 def load_data(days = 7, start = None, end = None, stream = 'b1', 
-              include_M1 = True, include_radsys_tower = True, include_radsys_ground = True, 
+              include_M1_skyrad = True, 
+              include_M1_groundrad = True, 
+              include_radsys_tower = True, 
+              include_radsys_ground = True, 
               source = 'datastream', 
               base_path = '/Users/htelg/data/arm/', 
-              version = 'v0.1',
+              version = '0.1',
               verbose = False):
     """
     Parameters
@@ -842,6 +847,9 @@ def load_data(days = 7, start = None, end = None, stream = 'b1',
     """
     def p2fld2fileseries(p2fld):
         sr = pd.Series(p2fld.glob('*.nc'))
+        if verbose:
+            print(f'found {len(sr)} files in {p2fld}')
+
         def extract_date_from_row(row):
             nsplit = row.name.split('.')
             if nsplit[1] == 'c1':
@@ -850,8 +858,12 @@ def load_data(days = 7, start = None, end = None, stream = 'b1',
                 return pd.to_datetime(' '.join(nsplit[2:4]))
         sr.index = sr.apply(extract_date_from_row)
         sr.sort_index(inplace=True)
-        sr = sr.truncate(start, end)
-        return sr
+        srt = sr.truncate(start, end)
+        if verbose:
+            print(f'selected {len(srt)} files between {start} and {end}')
+            if len(srt) == 0:
+                print(f'dateformating wrong? fist index: {sr.index[0]}, from filename: {sr.iloc[0].name}')
+        return srt
         
     out = dict(#tower = ds_tower,
            # ground = ds_ground,
@@ -875,6 +887,7 @@ def load_data(days = 7, start = None, end = None, stream = 'b1',
         p2fld_ground = pl.Path(f'{base_path}/{source}/bnf/bnfradsys2mS10.a1/')
     elif stream == 'c1':
         p2fld_tower = pl.Path(f'{base_path}/bnfradsys43m60sS10.c1/{version}/')
+        p2fld_ground = pl.Path(f'{base_path}/bnfradsys2m60sS10.c1/{version}/')
     else:
         assert(False), f'stream not recognised. Is: "{stream}"'
     
@@ -893,17 +906,36 @@ def load_data(days = 7, start = None, end = None, stream = 'b1',
         ds = xr.open_mfdataset(files_ground)
         out['ground'] = ds
     if include_radsys_tower:
+        if verbose:
+            print(f'loading tower path: {p2fld_tower})')
         files_tower = p2fld2fileseries(p2fld_tower)
-        ds = xr.open_mfdataset(files_tower, 
-                               combine="nested",
-                               concat_dim="time",  )
+        if verbose:
+            print(f'loading tower files: {files_tower})')
+        try:
+            ds = xr.open_mfdataset(files_tower, 
+                                combine="nested",
+                                concat_dim="time",  
+                                #    coords='minimal',
+                                )
+        except ValueError as e:
+            # try:
+            print(f'error loading tower files with xarray, trying with coords="minimal": {e}')
+            ds = xr.open_mfdataset(files_tower, 
+                                combine="nested",
+                                concat_dim="time",  
+                                   coords='minimal',
+                                )
+            
+
         out['tower'] = ds
-    if include_M1:
+    if include_M1_skyrad:
         files_M1 = p2fld2fileseries(p2fld_M1)
-        files_M1g = p2fld2fileseries(p2fld_M1g)
         ds_M1 = xr.open_mfdataset(files_M1)
-        ds_M1g = xr.open_mfdataset(files_M1g)
         out['M1_skyrad'] = ds_M1
+
+    if include_M1_groundrad:
+        files_M1g = p2fld2fileseries(p2fld_M1g)
+        ds_M1g = xr.open_mfdataset(files_M1g)
         out['M1_grdrad'] = ds_M1g
 
         
