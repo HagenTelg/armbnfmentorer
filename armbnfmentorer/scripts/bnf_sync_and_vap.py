@@ -30,6 +30,11 @@ def run(log_folder='/home/grad/htelg/.processlogs/',
                     user_remote= 'hagentelg',
                     path2localfld = '/nfs/stu3data2/bnf_radsys_data/',
                     path2remote = ['/data/archive/bnf/bnfradsys*',] )
+        
+        bnfqc.rsync_bnfradsys(
+                    user_remote= 'hagentelg',
+                    path2localfld = '/nfs/stu3data2/bnf_radsys_data/',
+                    path2remote = ['/data/datastream/bnf/bnfradsys*.00',] )
     run43(reporter = reporter)
     run2(reporter = reporter)
     reporter.wrapup()
