@@ -301,8 +301,9 @@ def plot_housekeeping(data):
     if 'b' in stream:
         text = 'No ventilation data in b1 data!'
         a.text(0.5, 0.5, text, transform = a.transAxes, ha = 'center')
-    a.set_ylim(4500, 5500)
+    # a.set_ylim(4500, 5500)
     a.set_ylabel('vent (rpm)')
+    a.legend()
     ##############################
     a = aa[1]
     # ds_tower.logger_volt_5v.plot(ax = a, label = 'tower-battery')
@@ -328,22 +329,26 @@ def plot_housekeeping(data):
     ds_ground.logger_temp.plot(ax = a, label = 'ground-l-temp')
     ds_ground.granite_temp1.plot(ax = a, label = 'ground-g-temp1')
     ds_ground.granite_temp2.plot(ax = a, label = 'ground-g-temp2')
-    
+    a.legend()
+    a.set_ylabel('granite temp. (C)')
     ##############################
     a = aa[3]
     ds_tower.inst_temp.plot(ax = a, label = 'tower')
     ds_ground.inst_temp.plot(ax = a, label = 'ground')
     a.legend()
+    a.set_ylabel('air temp. (C)')
     ##############################
     a = aa[4]
     ds_tower.inst_rh.plot(ax = a, label = 'tower')
     ds_ground.inst_rh.plot(ax = a, label = 'ground')
     a.legend()
+    a.set_ylabel('rh (%)')
     ###################################
     a = aa[5]
     ds_tower.clean_flag.plot(ax = a, label = 'tower')
     ds_ground.clean_flag.plot(ax = a, label = 'ground')
     a.legend()
+    a.set_ylabel('clean flag')
     return f,aa
 
 
@@ -631,15 +636,18 @@ def plot_tower_vs_ground_up(data):
     a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
     return f,aa
 
-def plot_downwelling(data):
+def plot_downwelling(data, days = None):
     merge_M1_skyrad_grdrad(data) # ensures that skyrad and grdrad are merged into M1, needed for qclib
     ds_tower = data['tower']
     ds_ground = data['ground']
     ds_M1 = data['M1']
     stream = data['stream']
-    days = data['days']
-    f,aa = plt.subplots(8, sharex = True,height_ratios=[2,1,2,1,2,1,2,1], gridspec_kw={'hspace': 0})
-    f.set_figheight(f.get_figheight() * 2)
+    if days is None:
+        days = data['days']
+    ratio_main = 3
+    ratio_minor = 1
+    f,aa = plt.subplots(8, sharex = True,height_ratios=[ratio_main,ratio_minor,ratio_main,ratio_minor,ratio_main,ratio_minor,ratio_main,ratio_minor], gridspec_kw={'hspace': 0})
+    f.set_figheight(f.get_figheight() * 3)
     f.set_figwidth(f.get_figwidth() * 1.5)
     mz_ratio = 0.1
     ####################

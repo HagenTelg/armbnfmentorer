@@ -61,6 +61,7 @@ def run2(path_in = '/nfs/stu3data2/bnf_radsys_data/bnfradsys2m60sS10.b1/',#'/Use
 
 def run43(path_in = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.b1/',#'/Users/htelg/data/arm/archive/bnf/bnfradsys43m60sS10.b1/'
         path_out = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1/{version}/',#'/Users/htelg/data/arm/vap/bnfradsys43m60sS10.c1/{version}/'
+        radflux_parameters_db = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1/radflux_parameters.sqlite',
         reporter = None,):
     print('Processing bnfradsys43m60sS10...')
     print('====================================')
@@ -73,9 +74,9 @@ def run43(path_in = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.b1/',#'/U
             start=None,
             end=None,
             reporter=reporter,
-            verbose=True,)
+            verbose=True,
+            radflux_parameters_db=radflux_parameters_db,)
 #     worker.process_row(iloc=0)
     worker.process(raise_errors = True)
     return 
     
-
