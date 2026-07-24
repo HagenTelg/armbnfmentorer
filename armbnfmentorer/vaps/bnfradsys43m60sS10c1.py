@@ -1,234 +1,13 @@
 import json
 import pathlib as pl
 import productomator.worker as prowo
-import sqlite3
+# import sqlite3
 import xarray as xr
 import pandas as pd
 import atmPy.radiation.retrievals.broadband_shortwave_radiation as atmbrad
 import atmPy.general.measurement_site as atmsite
 import socket
-
-
-
-default_clearsky_params = {'nsw_exp': 1.202095545434091,
-                            'nsw_min': 800,
-                            'nsw_max': 1400,
-                            'ndr_exp': -0.6827046137686424,
-                            'mu0_min': 0.05,
-                            'diffuse_max_coeff': 150,
-                            'diffuse_max_exp': 0.5,
-                            'max_dsw_dt': 8,
-                            'ndr_std_max': 0.005,
-                            'ndr_window': 11,}
-
-
-radflux_parameter_table = 'radflux_parameters'
-radflux_parameter_names = tuple(default_clearsky_params) + (
-    'ndr_std_max_estimated',
-    'diffuse_max_coeff_estimated',
-    'diffuse_max_exp_estimated',
-    'max_dsw_dt_estimated',
-)
-radflux_table_columns = {
-    'row_timestamp': 'TEXT PRIMARY KEY',
-    'input_file': 'TEXT NOT NULL',
-    'next_day_needed': 'BOOLEAN',
-    # 'output_file': 'TEXT NOT NULL',
-    'processed_at': 'TEXT NOT NULL',
-    'process_version': 'TEXT NOT NULL',
-    'processing_server': 'TEXT NOT NULL',
-    'clear_sky_params_optimized': 'TEXT',
-    # 'parameters_json': 'TEXT NOT NULL',
-    **{name: 'REAL' for name in radflux_parameter_names},
-}
-
-
-class RadfluxParameterDatabase:
-    def __init__(self, radflux_parameters_db, create_if_not_exist=False, version=None, verbose=False):
-        self.radflux_parameters_db = pl.Path(radflux_parameters_db)
-        self.verbose = verbose
-        self.version = version
-        if not self.radflux_parameters_db.exists() and not create_if_not_exist:
-            raise FileNotFoundError(f"{self.radflux_parameters_db} does not exist and create_if_not_exist is False.")
-        elif not self.radflux_parameters_db.exists() and create_if_not_exist:
-            self.radflux_parameters_db.parent.mkdir(parents=True, exist_ok=True)
-        with self.connect_database() as conn:
-            self.ensure_parameter_table(conn)
-
-    def connect_database(self):
-        conn = sqlite3.connect(self.radflux_parameters_db)
-        conn.row_factory = sqlite3.Row
-        return conn
-
-    def ensure_parameter_table(self, conn):
-        parameter_columns = ',\n                '.join(
-            f'{name} {dtype}' for name, dtype in radflux_table_columns.items()
-        )
-        table_exists = conn.execute(
-            """
-            SELECT name
-            FROM sqlite_master
-            WHERE type = 'table' AND name = ?
-            """,
-            (radflux_parameter_table,),
-        ).fetchone() is not None
-        conn.execute(f"""
-            CREATE TABLE IF NOT EXISTS {radflux_parameter_table} (
-                {parameter_columns}
-            )
-            """)
-        existing_columns = {
-            row['name']
-            for row in conn.execute(f'PRAGMA table_info({radflux_parameter_table})')
-        }
-        if table_exists and 'row_timestamp' not in existing_columns:
-            raise ValueError(
-                f'{self.radflux_parameters_db} contains a '
-                f'{radflux_parameter_table} table without row_timestamp'
-            )
-        for name, dtype in radflux_table_columns.items():
-            if name not in existing_columns:
-                dtype = dtype.replace(' NOT NULL', '').replace(' PRIMARY KEY', '')
-                conn.execute(
-                    f'ALTER TABLE {radflux_parameter_table} '
-                    f'ADD COLUMN {name} {dtype}'
-                )
-
-    @staticmethod
-    def timestamp2dbformat(timestamp):
-        return pd.to_datetime(timestamp).isoformat()
-
-    @staticmethod
-    def _database_value(value):
-        try:
-            if pd.isna(value):
-                return None
-        except (TypeError, ValueError):
-            pass
-        if hasattr(value, 'item'):
-            value = value.item()
-        return value
-    
-    def dump_radflux_parameters(self):
-        with self.connect_database() as conn:
-            self.ensure_parameter_table(conn)
-            df = pd.read_sql_query(
-                f'SELECT * FROM {radflux_parameter_table} ORDER BY row_timestamp DESC',
-                conn,
-                index_col='row_timestamp',
-            )
-        return df
-
-    def read_previous_valid_clearsky_parameters(self, timestamp):
-        """Retrieves the last set of clearsky parameters before the given timestamp."""
-        row_timestamp = self.timestamp2dbformat(timestamp)
-        with self.connect_database() as conn:
-            self.ensure_parameter_table(conn)
-            previous = conn.execute(
-                f"""
-                SELECT *
-                FROM {radflux_parameter_table}
-                WHERE row_timestamp < ?
-                  AND clear_sky_params_optimized = 'True'
-                ORDER BY row_timestamp DESC
-                LIMIT 1
-                """,
-                (row_timestamp,),
-            ).fetchone()
-            self.tp_prvious = previous
-
-        if previous is None:
-            if self.verbose:
-                print(f'No previous optimized clearsky parameters found for {row_timestamp}.')
-            self.tp_previous_radflux_parameters_record = None
-            return None
-
-        self.tp_previous_radflux_parameters_record = dict(previous)
-        # parameters = json.loads(previous['parameters_json'])
-        # parameters = {
-        #     name: value
-        #     for name, value in parameters.items()
-        #     if value is not None
-        # }
-        # return {**default_clearsky_params, **parameters}
-        return dict(previous)
-
-    def write_radflux_parameters(self,
-                                  row,
-                                  clearsky_parameters,
-                                  processing_date,
-                                  processing_server,
-                                  clear_sky_params_optimized,
-                                  next_day_needed
-                                  ):
-        # cleanup the parameters to ensure they are JSON serializable and handle NaN values
-        parameters = {
-            name: self._database_value(value)
-            for name, value in clearsky_parameters.items()
-        }
-        values = {
-            'row_timestamp': self.timestamp2dbformat(row.name),
-            'input_file': str(row.p2f_in),
-            'next_day_needed': next_day_needed,
-            # 'output_file': str(row.p2f_out),
-            'processed_at': processing_date,
-            'process_version': self.version,
-            'processing_server': processing_server,
-            'clear_sky_params_optimized': clear_sky_params_optimized,
-            # 'parameters_json': json.dumps(parameters, sort_keys=True),
-        }
-        values.update({
-            name: parameters.get(name)
-            for name in radflux_parameter_names
-        })
-        columns = tuple(values)
-        placeholders = ', '.join(['?'] * len(columns))
-        update_columns = ', '.join(
-            f'{column} = excluded.{column}'
-            for column in columns
-            if column != 'row_timestamp'
-        )
-
-        self.tp_columns = columns
-        self.tp_placeholders = placeholders
-        self.tp_values = values
-        with self.connect_database() as conn:
-            self.ensure_parameter_table(conn)
-            conn.execute(
-                f"""
-                INSERT INTO {radflux_parameter_table}
-                    ({', '.join(columns)})
-                VALUES ({placeholders})
-                ON CONFLICT(row_timestamp) DO UPDATE SET
-                    {update_columns}
-                """,
-                tuple(values[column] for column in columns),
-            )
-    def delete_rows_on_date(self, date, find_only = False):
-        """Deletes all rows in the radflux parameter database for a specific date."""
-        date_str = pd.to_datetime(date).strftime('%Y-%m-%d')
-        with self.connect_database() as conn:
-            self.ensure_parameter_table(conn)
-            if find_only:
-                rows = conn.execute(
-                    f"""
-                    SELECT *
-                    FROM {radflux_parameter_table}
-                    WHERE DATE(row_timestamp) = ?
-                    """,
-                    (date_str,),
-                ).fetchall()
-                return [dict(row) for row in rows]
-            else:
-                conn.execute(
-                    f"""
-                    DELETE FROM {radflux_parameter_table}
-                    WHERE DATE(row_timestamp) = ?
-                    """,
-                    (date_str,),
-                )
-        
-
+import atmPy.radiation.radflux.radflux_db as atmraddb
 
 class BnfRadsys43m60sS10C1Radflux(prowo.Workplanner):
     def __init__(self, *args, radflux_parameters_db, **kwargs):
@@ -244,7 +23,7 @@ class BnfRadsys43m60sS10C1Radflux(prowo.Workplanner):
         self.version = '0.1'
         kwargs['version'] = self.version
         self.radflux_parameters_db = pl.Path(radflux_parameters_db)
-        kwargs['database'] = (self.radflux_parameters_db, radflux_parameter_table, 'row_timestamp', 'None')# 'input_file')
+        kwargs['database'] = (self.radflux_parameters_db, 'radflux_parameters', 'row_timestamp', 'None')# 'input_file')
         super().__init__(*args, **kwargs)
         self.site = atmsite.Station(
                 lat=34.3437276,
@@ -261,7 +40,7 @@ class BnfRadsys43m60sS10C1Radflux(prowo.Workplanner):
                 # **kwargs,
             )
         # self.combine_masterplan_duplicates()
-        self.radflux_db = RadfluxParameterDatabase(self.radflux_parameters_db, create_if_not_exist=True, verbose=self.verbose, version = self.version)
+        self.radflux_db = atmraddb.RadfluxParameterDatabase(self.radflux_parameters_db, create_if_not_exist=True, verbose=self.verbose, version = self.version)
 
     def open_p2f_in(self, row):
         """Opens the input file(s) for a given row and returns an xarray dataset."""
@@ -420,7 +199,7 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
     def __init__(self, *args, radflux_parameters_db, **kwargs):
         self.version = '0.2'
         kwargs['version'] = self.version
-        self.radflux_parameters_db = pl.Path(radflux_parameters_db)
+        self.radflux_parameters_db = atmraddb.RadfluxParameterDatabase(radflux_parameters_db)
         super().__init__(*args, **kwargs)
         self.site = atmsite.Station(
                 lat=34.3437276,
@@ -437,7 +216,6 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
                 # **kwargs,
             )
         self.combine_masterplan_duplicates()
-        self._initialize_radflux_database()
 
 
 
@@ -468,9 +246,8 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
             row = self.workplan.loc[loc]
         self.tp_row = row
 
-        clearsky_parameters = self._read_previous_clearsky_parameters(row)
-        # self.tp_previous_clearsky_parameters = clearsky_parameters
-
+        clearsky_parameters = self.radflux_parameters_db.get_clearsky_parameter(row.name)
+        self.tp_clearsky_parameters = clearsky_parameters.copy()
         #######
         ## Open input files
         #######
@@ -489,11 +266,15 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
 
         bbi.direct_normal_irradiation #just to trigger the calculation of direct normal
         bbi.clearsky_parameters = clearsky_parameters
-        bbi.optimize_clearsky_parameters()
-        current_clearsky_parameters = bbi.clearsky_parameters
-        # self.tp_current_clearsky_parameters = current_clearsky_parameters
+
+        # initiate the caluclation of clearsky values
+        bbi.clearsky_global_horizontal
+        bbi.clearsky_diffuse_horizontal
+        #initiate the calculation of clearsky mask
+        bbi.mask_clear_sky_radflux
+        
         self.tp_bbi = bbi
-    
+        # return bbi
         ########
         # Format the dataset
         ########
@@ -510,10 +291,75 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
 
         ds = bbi.dataset.drop_vars(dropvar)
         ds = ds.rename({'global_horizontal':'down_short_hemisp',
-                         'diffuse_horizontal': 'down_short_diffuse_hemisp',
+                        'diffuse_horizontal': 'down_short_diffuse_hemisp',
                         'direct_horizontal': 'down_short_direct_hemisp',
                         'direct_normal': 'down_short_direct_normal',
-                        'datetime':'time'})        
+                        'datetime':'time',
+                        'clearsky_global_horizontal': 'down_short_hemisp_clearsky',
+                        'clearsky_diffuse_horizontal': 'down_short_diffuse_hemisp_clearsky',
+                        # 'down_short_direct_normal': 'down_short_direct_normal',
+                        })  
+
+        # reoganize variables
+
+        ds = ds[[
+                'base_time',
+                'time_offset',
+                'time_bounds',
+                'down_short_hemisp',
+                'qc_down_short_hemisp',
+                    'down_short_hemisp_clearsky',
+                'down_short_hemisp_std',
+                'down_short_hemisp_case_temp',
+                'down_short_hemisp_spn1',
+                'qc_down_short_hemisp_spn1',
+                'down_short_hemisp_spn1_std',
+                'down_short_diffuse_hemisp_spn1',
+                'qc_down_short_diffuse_hemisp_spn1',
+                'down_short_diffuse_hemisp_spn1_std',
+                'down_short_diffuse_hemisp',
+                'qc_down_short_diffuse_hemisp',
+                        'down_short_diffuse_hemisp_clearsky',
+                'down_short_direct_hemisp',
+                'qc_down_short_direct_hemisp',
+                    'down_short_direct_normal',
+                'mask_normalized_global_magnitude',
+                'mask_diffuse_magnitude',
+                'mask_global_irradiance_variability',
+                'mask_normalized_diffuse_ratio_variability',
+                'mask_clear_sky_shortwave_radflux',
+                'down_long_hemisp',
+                'qc_down_long_hemisp',
+                'down_long_hemisp_std',
+                'down_long_hemisp_case_temp',
+                'down_long_hemisp_dome_temp',
+                'up_short_hemisp',
+                'qc_up_short_hemisp',
+                'up_short_hemisp_std',
+                'up_short_hemisp_case_temp',
+                'up_long_hemisp',
+                'qc_up_long_hemisp',
+                'up_long_hemisp_std',
+                'up_long_hemisp_case_temp',
+                'up_long_hemisp_dome_temp',
+                'temp_mean',
+                'qc_temp_mean',
+                'temp_mean_std',
+                'rh_mean',
+                'qc_rh_mean',
+                'rh_mean_std',
+                'clean_flag',
+                'solar_zenith',
+                # 'solar_zenith_geometric',
+                # 'solar_elevation_geometric',
+                # 'solar_elevation',
+                'solar_azimuth',
+                # 'solar_equation_of_time',
+                'solar_airmass',
+                # 'solar_airmass_absolute',
+                'solar_sun_earth_distance'
+                ]]
+
         #########
         # Format the dataset attributes
         #########
@@ -522,7 +368,7 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
                     ]
         for a in dropattrs:
             ds.attrs.pop(a)
-
+        ds.attrs['radflux_status'] = clearsky_parameters['status']
         ds.attrs['lat'] = self.site.lat
         ds.attrs['lon'] = self.site.lon
         ds.attrs['alt'] = self.site.alt
