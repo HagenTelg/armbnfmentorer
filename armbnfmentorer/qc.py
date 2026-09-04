@@ -642,8 +642,8 @@ def plot_downwelling(data, days = None):
     ds_ground = data['ground']
     ds_M1 = data['M1']
     stream = data['stream']
-    if days is None:
-        days = data['days']
+    # if days is None:
+    #     days = data['days']
     ratio_main = 3
     ratio_minor = 1
     f,aa = plt.subplots(8, sharex = True,height_ratios=[ratio_main,ratio_minor,ratio_main,ratio_minor,ratio_main,ratio_minor,ratio_main,ratio_minor], gridspec_kw={'hspace': 0})
@@ -658,8 +658,8 @@ def plot_downwelling(data, days = None):
     
     ds_M1.down_short_hemisp.plot(ax = a, label = 'M1', ls = '--', lw = 1)
     a.legend(title = 'down short global', fontsize = 'small', loc = 2)
-    now = pd.Timestamp.now(tz = 'UTC')
-    a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
+    # now = pd.Timestamp.now(tz = 'UTC')
+    # a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
     a.set_ylabel('shortwave - global')
     
     a = aa[1]
@@ -718,8 +718,10 @@ def plot_downwelling(data, days = None):
     a.axhline(1, color = 'black', ls = '--', alpha = 0.5)
     a.set_ylabel('ratio')
     #######################3
-    now = pd.Timestamp.now(tz = 'UTC')
-    a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
+    # now = pd.Timestamp.now(tz = 'UTC')
+    start = pd.to_datetime(data['start'])
+    end = pd.to_datetime(data['end']) + pd.to_timedelta(1, 'd')
+    a.set_xlim(start, end)
     
     # for e,a in enumerate(aa):
     #     if e%2 == 1:
@@ -828,7 +830,7 @@ def plot_upwelling(data):
     a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
     return f,aa
 
-def load_data(days = 7, start = None, end = None, stream = 'b1', 
+def load_data(days = None, start = None, end = None, stream = 'b1', 
               include_M1_skyrad = True, 
               include_M1_groundrad = True, 
               include_radsys_tower = True, 
@@ -877,16 +879,24 @@ def load_data(days = 7, start = None, end = None, stream = 'b1',
            # ground = ds_ground,
            # M1 = ds_M1,
            stream = stream,
-           days = days,
+        #    days = days,
            # M1_down = ds_M1,
            # M1_up = ds_M1g,
           )
-    if isinstance(start, type(None)):
+    if not isinstance(start, type(None)) and not isinstance(end, type(None)):
+        assert(not isinstance(days, type(None))), 'if start and end are given, days must be None'
+        start = pd.to_datetime(start)
+        end = pd.to_datetime(end)
+    elif isinstance(start, type(None)) and isinstance(end, type(None)):
+        assert(not isinstance(days, type(None))), 'if start and end are None, days must be given'
         start = pd.Timestamp.now(tz = 'UTC').tz_localize(None) - pd.to_timedelta(days, 'd')
+    elif not isinstance(start, type(None)) and not isinstance(days, type(None)):
+        end = pd.to_datetime(start) + pd.to_timedelta(days, 'd')
+    elif not isinstance(end, type(None)) and not isinstance(days, type(None)):
+        start = pd.to_datetime(end) - pd.to_timedelta(days, 'd')
     else:
-        if isinstance(end, type(None)):
-            end = pd.to_datetime(start) + pd.to_timedelta(days, 'd')
-    
+        assert(False), 'any other combination of start, end and days is not implemented/'
+
     if stream == 'b1':
         p2fld_tower = pl.Path(f'{base_path}/{source}/bnf/bnfradsys43m60sS10.b1/')
         p2fld_ground = pl.Path(f'{base_path}/{source}/bnf/bnfradsys2m60sS10.b1/')
@@ -967,5 +977,6 @@ def load_data(days = 7, start = None, end = None, stream = 'b1',
     # often the time stemps are not identical -> interpolate 
     # ds_M1 = ds_M1.interp(time = ds_tower.time).compute()
     
-
+    out['start'] = start
+    out['end'] = end
     return out
