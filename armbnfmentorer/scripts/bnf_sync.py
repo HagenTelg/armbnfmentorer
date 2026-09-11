@@ -1,19 +1,11 @@
 """
 Requirements:
-- pvlib
-- xarray
-- pandas
-- netcdf4  
-- atmpy
 - productomator
+- pandas
 """
 
 import argparse
 
-import pandas as pd
-import xarray as xr
-import armbnfmentorer.vaps.bnfradsys43m60sS10c1 as vap43
-import armbnfmentorer.vaps.bnfradsys2m60sS10c1 as vap2
 import productomator.lab as prolab
 import armbnfmentorer.qc as bnfqc
 
