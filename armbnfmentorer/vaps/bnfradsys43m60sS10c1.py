@@ -1,4 +1,4 @@
-import json
+
 import pathlib as pl
 import productomator.worker as prowo
 # import sqlite3
@@ -10,7 +10,7 @@ import socket
 import atmPy.radiation.radflux.radflux_db as atmraddb
 
 class BnfRadsys43m60sS10C1Radflux(prowo.Workplanner):
-    def __init__(self, *args, radflux_parameters_db, **kwargs):
+    def __init__(self, *args, radflux_parameters_db, path2raflux_setting, **kwargs):
         """BNF Radsys value added product for the tower system with radflux parameter database.
         Features
         --------
@@ -18,12 +18,19 @@ class BnfRadsys43m60sS10C1Radflux(prowo.Workplanner):
         Cheanlog
         ------------
         version 0.1: initial version
+        version 0.2: 
+            - improved Radflux algorithm
+            - updated databank structure
         
         """
-        self.version = '0.1'
+        self.version = '0.2'
         kwargs['version'] = self.version
         self.radflux_parameters_db = pl.Path(radflux_parameters_db)
-        kwargs['database'] = (self.radflux_parameters_db, 'radflux_parameters', 'row_timestamp', 'None')# 'input_file')
+        kwargs['database'] = (self.radflux_parameters_db, 'radflux_parameters',
+                            #   'row_timesta
+                            # mp', 
+                              'local_day',
+                              'None')# 'input_file')
         super().__init__(*args, **kwargs)
         self.site = atmsite.Station(
                 lat=34.3437276,
@@ -41,6 +48,8 @@ class BnfRadsys43m60sS10C1Radflux(prowo.Workplanner):
             )
         # self.combine_masterplan_duplicates()
         self.radflux_db = atmraddb.RadfluxParameterDatabase(self.radflux_parameters_db, create_if_not_exist=True, verbose=self.verbose, version = self.version)
+        self.path2raflux_setting = pl.Path(path2raflux_setting)
+        assert(self.path2raflux_setting.exists()), f"Path does not exist: {self.path2raflux_setting}. Copy the example file from .../atm-py/atmPy/radiation/radflux/resources/clear_sky_shortwave.example.toml"
 
     def open_p2f_in(self, row):
         """Opens the input file(s) for a given row and returns an xarray dataset."""
@@ -50,7 +59,7 @@ class BnfRadsys43m60sS10C1Radflux(prowo.Workplanner):
             ds = xr.open_dataset(row.p2f_in)
         return ds
 
-    def process_row(self, row = None, iloc = None, loc = None, save = True):
+    def process_row(self, row = None, iloc = None, loc = None, save = True, test  = False):
         out = {}
         if iloc is not None:
             row = self.workplan.iloc[iloc]
@@ -58,7 +67,7 @@ class BnfRadsys43m60sS10C1Radflux(prowo.Workplanner):
             row = self.workplan.loc[loc]
         self.tp_row = row
 
-        clearsky_parameters_previous = self.radflux_db.read_previous_valid_clearsky_parameters(row.name)
+        clearsky_parameters_previous = self.radflux_db.get_clearsky_parameters(row.name, method='previous')
         self.tp_previous_clearsky_parameters = clearsky_parameters_previous
 
         #######
@@ -80,9 +89,7 @@ class BnfRadsys43m60sS10C1Radflux(prowo.Workplanner):
         # But first check if we need to get rid of the beginning of the day bacause the sun is still up from the previous day.
         bbicore.sun_position #just to trigger the calculation of sun position
         sunup_start = ds.solar_elevation.isel(datetime = 0) > 0 #still in the sky in beginning of file
-        # sunrising_start = ds.solar_elevation.differentiate('time').isel(time = 0) > 0 #sun is rising at the begining
         sunup_end = ds.solar_elevation.isel(datetime = -1) > 0 #still in the sky at end of file
-        # sunrising_end = ds.solar_elevation.differentiate('time').isel(time = -1) > 0 #sun is rising at the end
         next_day_needed = False
         dslist = []
         if sunup_start:
@@ -111,13 +118,27 @@ class BnfRadsys43m60sS10C1Radflux(prowo.Workplanner):
         ds_wholeday = xr.concat(dslist, dim = 'datetime')
         ds_wholeday = ds_wholeday.where(ds_wholeday.solar_elevation > 0, drop = True)
         self.tp_ds_wholeday = ds_wholeday.copy()
+
+        out['ds_wholeday'] = ds_wholeday
+
+        bbi = atmbrad.CombinedGlobalDiffuseDirect(ds_wholeday, site= self.site, verbose = self.verbose)
+        bbi = bbi.convert2RadFlux()
+        bbi.clearsky_parameters = self.path2raflux_setting # this provides most of the settings that do not change overtime
+        bbi.clearsky_parameters = clearsky_parameters_previous # this updates only the parameters that change over time, if there are no previous parameters, the default ones will be used.
+        bbi.direct_normal_irradiation #just to trigger the calculation of direct normal
+        out['bbi'] = bbi
+        if test == 1:
+            return out
+        self.tp_bbi = bbi
+
+        # some test of the file length and extend
         file_shape = ds_wholeday.datetime.shape[0]
         if file_shape > 1:
             file_duration = (ds_wholeday.datetime.data[-1] - ds_wholeday.datetime.data[0])/pd.to_timedelta(1,'h')
         else:
             file_duration = 0
         file_too_long = False
-        min_required_points = 2
+        min_required_points = bbi.get_attr('minimum_clear_sky_duration_for_daily_fit') #we don't even need to get started if the points are less than that
         file_too_short = False
         if file_shape < min_required_points:
             if self.verbose:
@@ -127,55 +148,29 @@ class BnfRadsys43m60sS10C1Radflux(prowo.Workplanner):
             print(f'The whole day dataset is longer than 24 hours. It is {file_duration} hours. This probably means that there was a data gap and this file should not be processed, and just marked as incomplete. The file is {row.p2f_in}.')
             file_too_long = True
 
-        out['ds_wholeday'] = ds_wholeday
-
-        bbi = atmbrad.CombinedGlobalDiffuseDirect(ds_wholeday, site= self.site, verbose = self.verbose)
-        bbi.direct_normal_irradiation #just to trigger the calculation of direct normal
-        # return bbi, clearsky_parameters_previous
         if file_too_short and not file_too_long:
+            radflux_res = None
             pass
         else:
-            if clearsky_parameters_previous is None:
-                if self.verbose:
-                    print('No previous optimized clearsky parameters found, using default parameters.')
-            else:
-                bbi.clearsky_parameters = clearsky_parameters_previous #set starting conditions
-            bbi.optimize_clearsky_parameters()
-        # min_required_points = 2
-        # file_too_short = False
-        # if bbi.dataset.datetime.shape[0] < min_required_points:
-        #     if self.verbose:
-        #         print(f'Not enough data points to optimize clearsky parameters. Found {bbi.dataset.datetime.shape[0]} points, but need at least {min_required_points}.')
-        #     file_too_short = True
-        # else:
-        # if not file_too_short and not file_too_long:
-            # bbi.optimize_clearsky_parameters()
+            radflux_res = bbi.optimize_clearsky_parameters()
 
-        current_clearsky_parameters = bbi.clearsky_parameters
+        out['radflux_res'] = radflux_res
+
         processing_date = pd.Timestamp.now().isoformat()
         processing_server = socket.gethostname()
 
-        if file_too_long:
-            current_clearsky_parameters = {k: None for k in current_clearsky_parameters}
-            bbi.dataset.attrs['clear_sky_params_optimized'] = "File longer than 24 hours"
-        elif file_too_short:
-            current_clearsky_parameters = {k: None for k in current_clearsky_parameters}
-            bbi.dataset.attrs['clear_sky_params_optimized'] = "Not enough data points"
-        elif bbi.dataset.attrs.get('clear_sky_params_optimized') != "True":
-            current_clearsky_parameters = {k: None for k in current_clearsky_parameters}
-
-        add2db = save
-        if add2db:
+        if save:
             self.radflux_db.write_radflux_parameters(
-                row,
-                current_clearsky_parameters,
-                processing_date,
-                processing_server,
-                bbi.dataset.attrs.get('clear_sky_params_optimized'),
-                next_day_needed,
+                date = row.name,
+                path2file = row.p2f_in,
+                clearsky_parameters = radflux_res,
+                processing_date = processing_date,
+                processing_server = processing_server,
+                # bbi.dataset.attrs.get('clear_sky_params_optimized'),
+                next_day_needed = next_day_needed,
             )
 
-        return bbi
+        return out
         
 
 class BnfRadsys43m60sS10C1(prowo.Workplanner):
@@ -196,7 +191,7 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
     version 0.2:
          - added radflux parameter database to store the optimized parameters for each processed file
        """
-    def __init__(self, *args, radflux_parameters_db, **kwargs):
+    def __init__(self, *args, radflux_parameters_db, real_time = False, **kwargs):
         self.version = '0.2'
         kwargs['version'] = self.version
         self.radflux_parameters_db = atmraddb.RadfluxParameterDatabase(radflux_parameters_db)
@@ -216,10 +211,33 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
                 # **kwargs,
             )
         self.combine_masterplan_duplicates()
+        self.real_time = real_time
 
+    @property
+    def workplan(self):
+        wp = super().workplan
+        if self.real_time:
+            return wp
+        else:
+            for idx, row in wp.iterrows():
+                clearsky_parameters = self.radflux_parameters_db.get_clearsky_parameter(row.name)
+                self.tp_clearsky_parameters = clearsky_parameters
+                if clearsky_parameters['status'].split(',')[0]== 'extrapolated':
+                    print(f'found extrapolated on {row.name}')
+                    wp = wp.loc[:idx]
+                    wp.drop(idx, inplace=True)
+                    break
+                elif clearsky_parameters['status'].split(',')[0]== 'interpolated':
+                    continue
+                elif clearsky_parameters['status'].split(',')[0]== 'valid clearsky day':
+                                    continue
+                else:
+                    print(clearsky_parameters['status'].split(',')[0])
+                    assert(False), f'found unexpected status {clearsky_parameters["status"]} on {row.name}'
+            return wp
+            
 
-
-    def process_row(self, row = None, iloc = None, loc = None, save = True):
+    def process_row(self, row = None, iloc = None, loc = None, save = True, test = False):
         """This is the method that does the particular work and will need to be overwritten in your subclass.
         Typical components:
         1. read the input file(s) (row.p2f_in)
@@ -237,6 +255,10 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
             An integer index to select a row from the workplan dataframe.
         loc : index label, optional
             select a row by timestamp.
+        save : bool, optional
+            Whether to save the output file.
+        test : bool, optional
+            Whether to run in test mode.
             """
         
         out = {}
@@ -252,7 +274,10 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
         ## Open input files
         #######
         try:
-            ds = xr.open_dataset(row.p2f_in)
+            if isinstance(row.p2f_in, list):
+                ds = xr.open_mfdataset(row.p2f_in)
+            else:   
+                ds = xr.open_dataset(row.p2f_in)
         except:
             print(row.p2f_in)
             raise
@@ -272,7 +297,9 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
         bbi.clearsky_diffuse_horizontal
         #initiate the calculation of clearsky mask
         bbi.mask_clear_sky_radflux
-        
+        if test == 1:
+            out['bbi'] = bbi
+            return out
         self.tp_bbi = bbi
         # return bbi
         ########
@@ -373,7 +400,12 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
         ds.attrs['lon'] = self.site.lon
         ds.attrs['alt'] = self.site.alt
         ds.attrs['input_datastreams'] = ds.attrs['datastream']
-        ds.attrs['input_files'] = row.p2f_in.name
+        if isinstance(row.p2f_in, list):
+            input_files = ', '.join([p2f.name for p2f in row.p2f_in])
+        else:
+            input_files = row.p2f_in.name
+
+        ds.attrs['input_files'] = input_files
         ds.attrs['data_level'] = 'c1'
         ds.attrs['process_version'] = self.version
         ds.attrs['datastream'] = 'bnfradsys43m60sS10.c1'

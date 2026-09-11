@@ -23,18 +23,6 @@ def run(log_folder='/home/grad/htelg/.processlogs/',
     reporter = prolab.Reporter('bnf_sync_and_vap', 
                             log_folder=log_folder,
                             reporting_frequency=(6, 'h'),)
-    if sync_files:      
-        print('Syncing files from remote server...')
-        print('====================================')
-        bnfqc.rsync_bnfradsys(
-                    user_remote= 'hagentelg',
-                    path2localfld = '/nfs/stu3data2/bnf_radsys_data/',
-                    path2remote = ['/data/archive/bnf/bnfradsys*',] )
-        
-        bnfqc.rsync_bnfradsys(
-                    user_remote= 'hagentelg',
-                    path2localfld = '/nfs/stu3data2/bnf_radsys_data/',
-                    path2remote = ['/data/datastream/bnf/bnfradsys*.00',] )
     run43(reporter = reporter)
     run2(reporter = reporter)
     reporter.wrapup()
