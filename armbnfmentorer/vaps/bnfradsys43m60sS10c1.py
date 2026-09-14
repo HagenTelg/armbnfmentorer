@@ -190,9 +190,11 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
        - clearsky mask according to radflux
     version 0.2:
          - added radflux parameter database to store the optimized parameters for each processed file
+    version 0.3:
+         - implement new radflux retrieval (testing equivalent to the real radflux)
        """
     def __init__(self, *args, radflux_parameters_db, real_time = False, **kwargs):
-        self.version = '0.2'
+        self.version = '0.3'
         kwargs['version'] = self.version
         self.radflux_parameters_db = atmraddb.RadfluxParameterDatabase(radflux_parameters_db)
         super().__init__(*args, **kwargs)
