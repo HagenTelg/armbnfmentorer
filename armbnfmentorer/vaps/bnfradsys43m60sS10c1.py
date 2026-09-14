@@ -25,7 +25,7 @@ class BnfRadsys43m60sS10C1Radflux(prowo.Workplanner):
         """
         self.version = '0.2'
         kwargs['version'] = self.version
-        self.radflux_parameters_db = pl.Path(radflux_parameters_db)
+        self.radflux_parameters_db = pl.Path(radflux_parameters_db.format(version = self.version))
         kwargs['database'] = (self.radflux_parameters_db, 'radflux_parameters',
                             #   'row_timesta
                             # mp', 

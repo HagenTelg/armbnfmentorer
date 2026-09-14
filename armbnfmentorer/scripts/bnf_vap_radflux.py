@@ -26,6 +26,7 @@ def run(log_folder='/home/grad/htelg/.processlogs/',
         path2raflux_setting = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1/raflux_settings_0.1.toml',
         radflux_parameters_db = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1/radflux_{version}.db',
         reporter = None,
+        test = False,
         verbose = False,
         raise_errors = False,
         ):
@@ -47,6 +48,9 @@ def run(log_folder='/home/grad/htelg/.processlogs/',
             )
 #     worker.process_row(iloc=0)
     worker.combine_masterplan_duplicates()
+    if test:
+        print(worker.workplan)
+        return 
     worker.process(raise_errors = raise_errors)
     reporter.wrapup()
     return 
@@ -80,6 +84,7 @@ def main(argv=None):
         default= '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1/radflux_{version}.db',
         help='Path to the Radflux parameters database.',
     )
+    parser.add_argument('--test', action='store_true') 
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument(
         '--raise-errors',
@@ -94,6 +99,7 @@ def main(argv=None):
         path2raflux_setting=args.path2raflux_setting,
         radflux_parameters_db=args.radflux_parameters_db,
         verbose=args.verbose,
+        test=args.test,
         raise_errors=args.raise_errors,
     )
 
