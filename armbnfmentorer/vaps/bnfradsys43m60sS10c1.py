@@ -4,6 +4,7 @@ import productomator.worker as prowo
 # import sqlite3
 import xarray as xr
 import pandas as pd
+import numpy as np
 import atmPy.radiation.retrievals.broadband_shortwave_radiation as atmbrad
 import atmPy.general.measurement_site as atmsite
 import socket
@@ -193,7 +194,7 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
     version 0.3:
          - implement new radflux retrieval (testing equivalent to the real radflux)
        """
-    def __init__(self, *args, radflux_parameters_db, real_time = False, **kwargs):
+    def __init__(self, *args, radflux_parameters_db, path2raflux_setting, real_time = False, **kwargs):
         self.version = '0.3'
         kwargs['version'] = self.version
         self.radflux_parameters_db = atmraddb.RadfluxParameterDatabase(radflux_parameters_db)
@@ -213,6 +214,8 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
                 # **kwargs,
             )
         self.combine_masterplan_duplicates()
+        self.path2raflux_setting = pl.Path(path2raflux_setting)
+        assert(self.path2raflux_setting.exists()), f"Path does not exist: {self.path2raflux_setting}. Copy the example file from .../atm-py/atmPy/radiation/radflux/resources/clear_sky_shortwave.example.toml"
         self.real_time = real_time
 
     @property
@@ -222,7 +225,7 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
             return wp
         else:
             for idx, row in wp.iterrows():
-                clearsky_parameters = self.radflux_parameters_db.get_clearsky_parameter(row.name)
+                clearsky_parameters = self.radflux_parameters_db.get_clearsky_parameters(row.name)
                 self.tp_clearsky_parameters = clearsky_parameters
                 if clearsky_parameters['status'].split(',')[0]== 'extrapolated':
                     print(f'found extrapolated on {row.name}')
@@ -270,7 +273,7 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
             row = self.workplan.loc[loc]
         self.tp_row = row
 
-        clearsky_parameters = self.radflux_parameters_db.get_clearsky_parameter(row.name)
+        clearsky_parameters = self.radflux_parameters_db.get_clearsky_parameters(row.name)
         self.tp_clearsky_parameters = clearsky_parameters.copy()
         #######
         ## Open input files
@@ -290,19 +293,24 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
                         'time':'datetime'}
         ds = ds.rename(bbi_rename_dict)
         bbi = atmbrad.CombinedGlobalDiffuseDirect(ds, site= self.site, verbose = self.verbose)
+        bbi = bbi.convert2RadFlux()
+        self.tp_bbi = bbi
 
         bbi.direct_normal_irradiation #just to trigger the calculation of direct normal
+
+        bbi.clearsky_parameters = self.path2raflux_setting # this provides most of the settings that do not change overtime
         bbi.clearsky_parameters = clearsky_parameters
 
         # initiate the caluclation of clearsky values
         bbi.clearsky_global_horizontal
         bbi.clearsky_diffuse_horizontal
         #initiate the calculation of clearsky mask
-        bbi.mask_clear_sky_radflux
+        bbi.mask_clear_sky_shortwave #tiggers retrieval
+        bbi.cloud_fraction #tiggers retrieval
+        bbi.direct_beam_proerties #triggers retrieval
         if test == 1:
             out['bbi'] = bbi
             return out
-        self.tp_bbi = bbi
         # return bbi
         ########
         # Format the dataset
@@ -337,7 +345,7 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
                 'time_bounds',
                 'down_short_hemisp',
                 'qc_down_short_hemisp',
-                    'down_short_hemisp_clearsky',
+                'down_short_hemisp_clearsky',
                 'down_short_hemisp_std',
                 'down_short_hemisp_case_temp',
                 'down_short_hemisp_spn1',
@@ -348,15 +356,23 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
                 'down_short_diffuse_hemisp_spn1_std',
                 'down_short_diffuse_hemisp',
                 'qc_down_short_diffuse_hemisp',
-                        'down_short_diffuse_hemisp_clearsky',
+                'down_short_diffuse_hemisp_clearsky',
                 'down_short_direct_hemisp',
                 'qc_down_short_direct_hemisp',
                     'down_short_direct_normal',
                 'mask_normalized_global_magnitude',
                 'mask_diffuse_magnitude',
-                'mask_global_irradiance_variability',
+                'mask_global_irradiance_temporal_gradient',
                 'mask_normalized_diffuse_ratio_variability',
-                'mask_clear_sky_shortwave_radflux',
+                'mask_clear_sky_shortwave',
+                'shortwave_cloud_fraction',
+                'shortwave_cloud_fraction_uncorrected',
+                'direct_beam_transmittance', 
+                'direct_beam_cloud_effect', 
+                'direct_beam_state',
+                #
+                ### longwave
+                #
                 'down_long_hemisp',
                 'qc_down_long_hemisp',
                 'down_long_hemisp_std',
@@ -390,14 +406,45 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
                 ]]
 
         #########
+        # attributes to some particular variables
+        #########
+        da = ds['down_short_hemisp_clearsky']
+        da.attrs['radflux_status_coefficient'] = clearsky_parameters.normalized_total_shortwave_power_coefficient.status
+        da.attrs['radflux_status_exponent'] = clearsky_parameters.normalized_total_shortwave_power_exponent.status
+        da = ds['down_short_diffuse_hemisp_clearsky']
+        da.attrs['radflux_status_coefficient'] = clearsky_parameters.normalized_diffuse_ratio_power_coefficient.status
+        da.attrs['radflux_status_exponent'] = clearsky_parameters.normalized_diffuse_ratio_power_exponent.status
+
+        #########
         # Format the dataset attributes
         #########
         dropattrs = ['history','doi','averaging_interval','calib_info','command_line',
-                    # '','','','','',
+                     'Conventions',
+                     'dod_version',
+                        'maximum_solar_zenith_angle',
+                        'maximum_diffuse_shortwave_irradiance',
+                        'maximum_diffuse_shortwave_cosine_exponent',
+                        'normalized_diffuse_ratio_standard_deviation_limit',
+                        'normalized_diffuse_ratio_standard_deviation_window_minutes',
+                        'shortwave_temporal_gradient_envelope_constant',
+                        'minimum_total_shortwave_irradiance',
+                        'normalized_total_shortwave_intermediate_iteration_half_width',
+                        'normalized_total_shortwave_final_iteration_half_width',
+                        'normalized_total_shortwave_low_sun_cosine_boundary',
+                        'minimum_clear_sky_duration_for_daily_fit',
+                        'diffuse_ratio_exponent_lower_validity_limit',
+                        'diffuse_ratio_exponent_upper_validity_limit',
+                        'normalized_total_shortwave_lower_limit_low_sun',
+                        'normalized_total_shortwave_lower_limit_high_sun',
+                        'normalized_total_shortwave_upper_limit',
+                        'normalized_diffuse_ratio_power_exponent',
+                        'normalized_diffuse_ratio_power_coefficient',
+                        'normalized_total_shortwave_power_exponent',
+                        'normalized_total_shortwave_power_coefficient',
                     ]
         for a in dropattrs:
             ds.attrs.pop(a)
-        ds.attrs['radflux_status'] = clearsky_parameters['status']
+        # ds.attrs['radflux_status'] = clearsky_parameters['status']
         ds.attrs['lat'] = self.site.lat
         ds.attrs['lon'] = self.site.lon
         ds.attrs['alt'] = self.site.alt
@@ -416,10 +463,116 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
         ds.attrs['processing_date'] = processing_date
         ds.attrs['processing_server'] = processing_server
 
+        # to save some storage
+        for var in ds:
+            if ds[var].dtype == np.float64:
+                ds[var] = ds[var].astype(np.float32)
 
+        #######
+        ## tree structure - optional?
+        attrs = ds.attrs
+        prepend = {
+          "file_format": (
+                "Hierarchical netCDF-4 file using groups. "
+                "Use a group-aware reader or explicitly select a group/path "
+                "(e.g., xarray.open_datatree(), MATLAB ncinfo/ncread)."
+            )
+        }
+        attrs = prepend | attrs
+        tree = xr.DataTree(dataset=xr.Dataset(attrs=attrs), name="radflux")
+
+        tree["measurements"] = ds[[
+            "base_time",
+            "time_offset",
+            "time_bounds",
+
+            "down_short_hemisp",
+            "qc_down_short_hemisp",
+            "down_short_hemisp_std",
+            "down_short_hemisp_case_temp",
+
+            "down_short_hemisp_spn1",
+            "qc_down_short_hemisp_spn1",
+            "down_short_hemisp_spn1_std",
+            "down_short_diffuse_hemisp_spn1",
+            "qc_down_short_diffuse_hemisp_spn1",
+            "down_short_diffuse_hemisp_spn1_std",
+
+            "down_short_diffuse_hemisp",
+            "qc_down_short_diffuse_hemisp",
+
+            "down_short_direct_hemisp",
+            "qc_down_short_direct_hemisp",
+            "down_short_direct_normal",
+
+            "down_long_hemisp",
+            "qc_down_long_hemisp",
+            "down_long_hemisp_std",
+            "down_long_hemisp_case_temp",
+            "down_long_hemisp_dome_temp",
+
+            "up_short_hemisp",
+            "qc_up_short_hemisp",
+            "up_short_hemisp_std",
+            "up_short_hemisp_case_temp",
+
+            "up_long_hemisp",
+            "qc_up_long_hemisp",
+            "up_long_hemisp_std",
+            "up_long_hemisp_case_temp",
+            "up_long_hemisp_dome_temp",
+
+            "temp_mean",
+            "qc_temp_mean",
+            "temp_mean_std",
+
+            "rh_mean",
+            "qc_rh_mean",
+            "rh_mean_std",
+
+            "clean_flag",
+        ]].drop_attrs()
+
+        tree["clearsky"] = ds[[
+            "mask_clear_sky_shortwave",
+            "down_short_hemisp_clearsky",
+            "down_short_diffuse_hemisp_clearsky",
+        ]].drop_attrs()
+
+        tree["cloud"] = ds[[
+            "shortwave_cloud_fraction",
+            "shortwave_cloud_fraction_uncorrected",
+            "direct_beam_transmittance",
+            "direct_beam_cloud_effect",
+            "direct_beam_state",
+        ]].drop_attrs()
+
+        tree["diagnostics"] = ds[[
+            "mask_normalized_global_magnitude",
+            "mask_diffuse_magnitude",
+            "mask_global_irradiance_temporal_gradient",
+            "mask_normalized_diffuse_ratio_variability",
+        ]].drop_attrs()
+
+        tree["solar"] = ds[[
+            "solar_zenith",
+            "solar_azimuth",
+            "solar_airmass",
+            "solar_sun_earth_distance",
+        ]].drop_attrs()
+
+
+        tree["clearsky"]["mask_clear_sky_shortwave"].attrs["ancillary_variables"] = (
+            "../diagnostics/mask_normalized_global_magnitude "
+            "../diagnostics/mask_diffuse_magnitude "
+            "../diagnostics/mask_global_irradiance_temporal_gradient "
+            "../diagnostics/mask_normalized_diffuse_ratio_variability"
+        )
+
+        ds = tree
 
         ## Save the output file
-        
+
         if save:
             row.p2f_out.parent.mkdir(parents=True, exist_ok=True)
             ds.to_netcdf(row.p2f_out)
