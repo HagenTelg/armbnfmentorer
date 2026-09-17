@@ -24,6 +24,7 @@ dependencies = []
 packages = ["armbnfmentorer"]
 
 [project.scripts]
+bnf_vap_43_c1 = "armbnfmentorer.scripts.bnf_vap_43_c1:main"
 bnf_sync = "armbnfmentorer.scripts.bnf_sync:main"
 bnf_sync_and_vap = "armbnfmentorer.scripts.bnf_sync_and_vap:run"
 bnf_vap_radflux = "armbnfmentorer.scripts.bnf_vap_radflux:main"
