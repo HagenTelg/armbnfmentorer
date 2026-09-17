@@ -226,21 +226,77 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
         else:
             for idx, row in wp.iterrows():
                 clearsky_parameters = self.radflux_parameters_db.get_clearsky_parameters(row.name)
-                self.tp_clearsky_parameters = clearsky_parameters
-                if clearsky_parameters['status'].split(',')[0]== 'extrapolated':
-                    print(f'found extrapolated on {row.name}')
+                stop = False
+                for v in clearsky_parameters:
+                    status = clearsky_parameters[v].status
+                    if status == 'Current day is a valid clearsky day':
+                        pass
+                    elif status.split(',')[0] == 'interpolated':
+                        pass
+                    elif ','.join(status.split(',')[:2]) == 'extrapolated, no previous parameters found':
+                        pass
+                    elif ','.join(status.split(',')[:2]) == 'extrapolated, no following parameters found':
+                        if self.real_time:
+                            pass
+                        else:
+                            stop = True
+                            break
+                    else:
+                        raise ValueError(f'Unknown status for clearskyparameter: {status}')
+                if stop:
                     wp = wp.loc[:idx]
                     wp.drop(idx, inplace=True)
                     break
-                elif clearsky_parameters['status'].split(',')[0]== 'interpolated':
-                    continue
-                elif clearsky_parameters['status'].split(',')[0]== 'valid clearsky day':
-                                    continue
                 else:
-                    print(clearsky_parameters['status'].split(',')[0])
-                    assert(False), f'found unexpected status {clearsky_parameters["status"]} on {row.name}'
+                    continue
+
+                # if clearsky_parameters['status'].split(',')[0]== 'extrapolated':
+                #     print(f'found extrapolated on {row.name}')
+                #     wp = wp.loc[:idx]
+                #     wp.drop(idx, inplace=True)
+                #     break
+                # elif clearsky_parameters['status'].split(',')[0]== 'interpolated':
+                #     continue
+                # elif clearsky_parameters['status'].split(',')[0]== 'valid clearsky day':
+                #                     continue
+                # else:
+                #     print(clearsky_parameters['status'].split(',')[0])
+                #     assert(False), f'found unexpected status {clearsky_parameters["status"]} on {row.name}'
             return wp
+
+    @staticmethod
+    def open_input_files(input_files):
+        try:
+            if isinstance(input_files, list):
+                ds = xr.open_mfdataset(input_files)
+            else:   
+                ds = xr.open_dataset(input_files)
+        except:
+            print(input_files)
+            raise  
+        ds = ds.drop_vars(['base_time', 'time_offset', 'time_bounds'])  
+        return ds
+
+    # def process(self, raise_errors = False):
+    #     si = None
+    #     for idx, row in self.workplan.iterrows():
+    #         try:
+    #             si = self.process_row(row)
+    #             if si['status'] == 'break':
+    #                 print(f'Breaking on row {idx} due to status: {si["status"]}. This is probably because radflux needs more days in the future.')
+    #                 break
+    #             self.reporter.clean_increment()
+
+    #         except Exception as e:
+    #             if raise_errors:
+    #                 raise e
+    #             else:
+    #                 print(f'Error occurred while processing row {idx}: {e}')
+    #                 self.reporter.errors_increment()
+    #                 continue
             
+    #         print('.', end = '')
+    #     return si
 
     def process_row(self, row = None, iloc = None, loc = None, save = True, test = False):
         """This is the method that does the particular work and will need to be overwritten in your subclass.
@@ -266,7 +322,7 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
             Whether to run in test mode.
             """
         
-        out = {}
+        out = {'status': 'success'}
         if iloc is not None:
             row = self.workplan.iloc[iloc]
         elif loc is not None:
@@ -275,18 +331,52 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
 
         clearsky_parameters = self.radflux_parameters_db.get_clearsky_parameters(row.name)
         self.tp_clearsky_parameters = clearsky_parameters.copy()
+
+        # test the status of the clearsky parameters. Return depending on conditions.
+        # for v in clearsky_parameters:
+        #     status = clearsky_parameters[v].status
+        #     if status == 'Current day is a valid clearsky day':
+        #         pass
+        #     elif ','.join(status.split(',')[:2]) == 'extrapolated, no previous parameters found':
+        #         pass
+        #     elif ','.join(status.split(',')[:2]) == 'extrapolated, no following parameters found':
+        #         if self.real_time:
+        #             pass
+        #         else:
+        #             out['status'] = 'break'
+        #             return out
+        #     else:
+        #         raise ValueError(f'Unknown status for clearskyparameter: {status}')
+            
         #######
         ## Open input files
         #######
-        try:
-            if isinstance(row.p2f_in, list):
-                ds = xr.open_mfdataset(row.p2f_in)
-            else:   
-                ds = xr.open_dataset(row.p2f_in)
-        except:
-            print(row.p2f_in)
-            raise
+        dslist =[]
+        row_position = self.masterplan.index.get_loc(row.name)
+        # load previous row
+        if row_position > 0:
+            row_prev = self.masterplan.iloc[row_position-1]
+            if row_prev.name.date() == (row.name.date() - pd.Timedelta(days=1)):
+                dslist.append(self.open_input_files(row_prev.p2f_in))    
+                if self.verbose:
+                    print(f'Loaded previous day {row_prev.name.date()} for {row.name.date()}')
 
+        # load the actual row
+        dslist.append(self.open_input_files(row.p2f_in))
+
+        # load next row
+        if row_position + 1 < len(self.masterplan):
+            row_next = self.masterplan.iloc[row_position+1]
+            if row_next.name.date() == (row.name.date() + pd.Timedelta(days=1)):
+                dst = self.open_input_files(row_next.p2f_in)
+                dslist.append(dst)   
+                if self.verbose:
+                    print(f'Loaded next day {row_next.name.date()} for {row.name.date()}')
+
+        self.tp_dslist = dslist
+        ds = xr.concat(dslist, dim = 'time')
+
+        # format the dataset to be compatible with atmPy
         bbi_rename_dict = {'down_short_hemisp': 'global_horizontal',
                         'down_short_diffuse_hemisp': 'diffuse_horizontal',
                         'down_short_direct_hemisp': 'direct_horizontal',
@@ -327,6 +417,9 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
         self.tp_dropvar = dropvar
 
         ds = bbi.dataset.drop_vars(dropvar)
+        day_end = row.name.date() + pd.Timedelta(days=1) - pd.Timedelta(nanoseconds=1)
+        ds = ds.sel(datetime=slice(row.name.date(), day_end))
+
         ds = ds.rename({'global_horizontal':'down_short_hemisp',
                         'diffuse_horizontal': 'down_short_diffuse_hemisp',
                         'direct_horizontal': 'down_short_direct_hemisp',
@@ -340,9 +433,9 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
         # reoganize variables
 
         ds = ds[[
-                'base_time',
-                'time_offset',
-                'time_bounds',
+                # 'base_time',
+                # 'time_offset',
+                # 'time_bounds',
                 'down_short_hemisp',
                 'qc_down_short_hemisp',
                 'down_short_hemisp_clearsky',
@@ -482,9 +575,9 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
         tree = xr.DataTree(dataset=xr.Dataset(attrs=attrs), name="radflux")
 
         tree["measurements"] = ds[[
-            "base_time",
-            "time_offset",
-            "time_bounds",
+            # "base_time",
+            # "time_offset",
+            # "time_bounds",
 
             "down_short_hemisp",
             "qc_down_short_hemisp",
@@ -581,3 +674,4 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
         out['bbi'] = bbi
         out['row'] = row
         return out 
+    
