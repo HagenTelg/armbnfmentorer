@@ -21,20 +21,20 @@ import pandas as pd
 # import atmPy.radiation.radflux.lab as atmradflux
 
 def run(path_in = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.b1/',#'/Users/htelg/data/arm/archive/bnf/bnfradsys43m60sS10.b1/'
-        path_out = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1/{version}/',#'/Users/htelg/data/arm/vap/bnfradsys43m60sS10.c1/{version}/'
+        path_out = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1.realtime/{version}/',#'/Users/htelg/data/arm/vap/bnfradsys43m60sS10.c1/{version}/'
         radflux_setting = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1/raflux_settings_0.1.toml',
         radflux_parameters_db = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1/radflux_0.2.db',
         log_folder="/home/grad/htelg/.processlogs/",
         start=None,
         end=None,
-        noofdays=180, #
+        noofdays=60, #
         test=0,
         raise_errors=False,
         verbose=True,
         ):
 
     reporter = prolab.Reporter(
-        "bnf_vap_43_c1",
+        "bnf_vap_43_c1_realtime",
         log_folder=log_folder,
         reporting_frequency=(6, "h"),
     )
@@ -54,7 +54,7 @@ def run(path_in = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.b1/',#'/Use
                                         output_file_format = 'bnfradsys43m60sS10.c1.{date}.nc',
                                         radflux_parameters_db = radflux_parameters_db, 
                                         path2raflux_setting = radflux_setting,
-                                        # real_time = True,
+                                        real_time = True,
                                         start=start,
                                         end=end,
                                         # start='2026-07-01',
@@ -114,7 +114,7 @@ def main(argv=None):
     parser.add_argument(
         "--noofdays",
         type=int,
-        default=180,
+        default=60,
         help="Number of days before end to process when start is omitted.",
     )
     parser.add_argument(
