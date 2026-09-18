@@ -12,6 +12,44 @@ from io import BytesIO
 # from IPython.display import display
 ipywidgets = OptionalImport("ipywidgets")
 
+def rsync_bnfradsys_to_server(server: str = 'research.adc.arm.gov',
+                              user_remote: str = 'hagentelg',
+                              path2localfld: str = "/Users/htelg/data/arm/datastream/bnf",
+                              path2remote: str = "/data/datastream/bnf",
+                              verbose=False) -> None:
+    """Mirror a local folder to a folder on the remote server.
+
+    Files present only in the remote folder are deleted so that the remote
+    folder remains an exact mirror of the local folder. SSH key authentication
+    must be configured for the remote server.
+
+    Parameters
+    ----------
+    server : str
+        Hostname of the remote server.
+    user_remote : str
+        Username for the remote server.
+    path2localfld : str
+        Local directory whose contents are mirrored.
+    path2remote : str
+        Remote destination directory.
+    verbose : bool
+        Print the rsync command before running it.
+    """
+    source = f"{pl.Path(path2localfld)}/"
+    destination = f"{user_remote}@{server}:{path2remote.rstrip('/')}/"
+    command = [
+        "rsync",
+        "-avz",
+        "--delete",
+        "-e", "ssh",
+        source,
+        destination,
+    ]
+    if verbose:
+        print(f"running the rsync command: {' '.join(command)}")
+    subprocess.run(command, check=True)
+
 def rsync_bnfradsys(server: str = 'research.adc.arm.gov',
                     user_remote: str = 'hagentelg', 
                     path2localfld: str = "/Users/htelg/data/arm/datastream/bnf",
