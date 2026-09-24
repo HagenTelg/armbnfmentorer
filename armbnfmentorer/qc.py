@@ -248,57 +248,83 @@ def get_file_availability(days = 7, stream = 'b1', base_path = '/Users/htelg/dat
     return out
 
 def plot_masked_clearsky(datac1, xlim_right_now = True):
-    ds_tower = datac1['tower']
-    
-    f,a = plt.subplots()
+    dt_tower = datac1['tower']
+
+    f,aa = plt.subplots(2, sharex=True, gridspec_kw={'hspace': 0})
     f.set_figwidth(f.get_figwidth() *1.5)
+    f.set_figheight(f.get_figheight() * 1.2)
+
     alpha = 0.4
     lw = 1.5
     lw2 = 1
-    g,=ds_tower.down_short_hemisp.plot(
+
+    ##################
+    a = aa[0]
+    g,=dt_tower.measurements.down_short_hemisp.plot(
                                         # marker = '.', 
                                         ls = '-', lw = lw2, 
                                         # markersize = 3, 
-                                        alpha = alpha)
+                                        alpha = alpha,
+                                        ax = a)
     g.set_markeredgewidth(0)
     col = g.get_color()
     gg = g
     
-    g, = ds_tower.down_short_hemisp.where(ds_tower.mask_clear_sky_shortwave_radflux).plot(lw = lw)
+    g, = dt_tower.measurements.down_short_hemisp.where(dt_tower.clearsky.mask_clear_sky_shortwave).plot(lw = lw,
+                                        ax = a)
     g.set_color(col)
     ###
     
-    g,=ds_tower.down_short_diffuse_hemisp.plot(
+    g,=dt_tower.measurements.down_short_diffuse_hemisp.plot(
                                         # marker = '.', 
                                         ls = '-', lw = lw2,
                                         # markersize = 3, 
-                                        alpha = alpha)
+                                        alpha = alpha,
+                                        ax = a)
     g.set_markeredgewidth(0)
     col = g.get_color()
-    g, = ds_tower.down_short_diffuse_hemisp.where(ds_tower.mask_clear_sky_shortwave_radflux).plot(lw = lw)
+    g, = dt_tower.measurements.down_short_diffuse_hemisp.where(dt_tower.clearsky.mask_clear_sky_shortwave).plot(lw = lw,
+                                        ax = a)
     g.set_color(col)
     
     ###
-    g,=ds_tower.down_short_direct_normal.plot(
+    g,=dt_tower.measurements.down_short_direct_normal.plot(
                                         # marker = '.', 
                                         ls = '-', lw = lw2,
                                         # markersize = 3, 
-                                        alpha = alpha)
+                                        alpha = alpha,
+                                        ax = a)
     g.set_markeredgewidth(0)
     col = g.get_color()
-    g, = ds_tower.down_short_direct_normal.where(ds_tower.mask_clear_sky_shortwave_radflux).plot(lw = lw)
-    
+    g, = dt_tower.measurements.down_short_direct_normal.where(dt_tower.clearsky.mask_clear_sky_shortwave).plot(lw = lw,
+                                        ax = a)
     g.set_color(col)
-    for dt in ds_tower.time.where(~ds_tower.mask_clear_sky_shortwave_radflux).dropna('time'):
+    for dt in dt_tower.measurements.time.where(~dt_tower.clearsky.mask_clear_sky_shortwave).dropna('time'):
         a.axvline(dt.values, color = '0.2', zorder = 0, lw = 0.01)
     
     y = gg.get_ydata()
     y = y[np.isfinite(y)]
     pad = (y.max() - y.min()) * 0.05
     a.set_ylim(y.min() - pad, y.max() + 4 * pad)
+
+    labels = ['','global (SR20)','','diffuse (SPN1)','', 'direct (SPN1)', '']
+    for e,g in enumerate(a.get_lines()):
+        try:
+            g.set_label(labels[e])
+        except:
+            break
+    a.legend(loc = 2)
+
+    ####################
+    a = aa[1]
+    dt_tower.cloud.shortwave_cloud_fraction.plot(ax = a)
+    a.set_ylim(-0.1,1.1)
+    a.set_ylabel('SW cloud fraction')
+
     if xlim_right_now:
         a.set_xlim(right = pd.Timestamp.now())
-    return f,a
+    return f,aa
+
 
 def plot_clearsky_masks(datac1):
     ds = datac1['tower']
@@ -322,7 +348,10 @@ def plot_housekeeping(data):
     ds_ground = data['ground']
     ds_M1 = data['M1']
     stream = data['stream']
-    days = data['days']
+    start = data['start']
+    end = data['end']
+    if end is None:
+        end = pd.Timestamp.now(tz = 'UTC').tz_localize(None) 
     
     f,aa = plt.subplots(6, sharex=True, gridspec_kw={'hspace': 0})
     f.set_figheight(f.get_figheight() * 2)
@@ -450,7 +479,11 @@ def plot_spn1_vs_sr20(data):
     ds_ground = data['ground']
     ds_M1 = data['M1']
     stream = data['stream']
-    days = data['days']
+    start = data['start']
+    end = data['end']
+    if end is None:
+        end = pd.Timestamp.now(tz = 'UTC').tz_localize(None)    
+
     f,aa = plt.subplots(6, sharex = True,height_ratios=[2,1,
                                                         2,1,
                                                         2,1,
@@ -468,7 +501,7 @@ def plot_spn1_vs_sr20(data):
     dst_tower_spn1.plot(ax = a, label = 'SPN1', ls = '--', lw = 1)
     a.legend(title = 'tower', fontsize = 'small', loc = 1)
     now = pd.Timestamp.now(tz = 'UTC')
-    a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
+    a.set_xlim(start, end)
     
     a = aa[1]
     (dst_tower_spn1/ dst_tower).plot(ax = a, label = 'tower', marker = '.', ls = '', markersize = mz_ratio)
@@ -488,7 +521,7 @@ def plot_spn1_vs_sr20(data):
     dst_ground_spn1.plot(ax = a, label = 'SPN1', ls = '--', lw = 1)
     a.legend(title = 'ground', fontsize = 'small', loc = 1)
     now = pd.Timestamp.now(tz = 'UTC')
-    a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
+    a.set_xlim(start, end)
     
     a = aa[3]
     (dst_ground_spn1/ dst_ground).plot(ax = a, label = 'tower', marker = '.', ls = '', markersize = mz_ratio)
@@ -508,7 +541,7 @@ def plot_spn1_vs_sr20(data):
     dst_ground_spn1.plot(ax = a, label = 'SPN1 - diffuse', ls = '--', lw = 1)
     a.legend(title = 'ground', fontsize = 'small', loc = 1)
     now = pd.Timestamp.now(tz = 'UTC')
-    a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
+    a.set_xlim(start, end)
     
     a = aa[5]
     (dst_ground_spn1/ dst_ground).plot(ax = a, label = 'tower', marker = '.', ls = '', markersize = mz_ratio)
@@ -521,12 +554,12 @@ def plot_spn1_vs_sr20(data):
     #######################3
     now = pd.Timestamp.now(tz = 'UTC')#p2fld_tower = pl.Path('/data/datastream/bnf/bnfradsys43mS10.a1/')
     
-    a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
+    a.set_xlim(start, end)
     return f,aa
 
 def plot_is_data_comming_in(data):
     merge_M1_skyrad_grdrad(data) # ensures that skyrad and grdrad are merged into M1, needed for qclib
-    days = data['days']
+    # days = data['days']
     ds_tower = data['tower']
     f,aa = plt.subplots(3, sharex=True, gridspec_kw={'hspace': 0})
     a = aa[0]
@@ -544,17 +577,21 @@ def plot_is_data_comming_in(data):
     a.legend()
     ########
     ### shading
-    now = pd.Timestamp.now(tz = 'UTC')
+    # now = pd.Timestamp.now(tz = 'UTC')
+    if data['end'] is None:
+        end = pd.Timestamp.now(tz = 'UTC').tz_localize(None)
+    start = data['start']
+    days = int((end-start)/pd.to_timedelta(1, 'd'))
     for a in aa:
-        end = now.date()
+        endt = end.date()
         for e in range(days):
-            start = end-pd.to_timedelta(1, 'd')
+            startt = endt-pd.to_timedelta(1, 'd')
             col = str((e)%2) 
             # print(f'{e}, {start}, {end}, {col}')
-            a.axvspan(start, end, color = col, alpha = 0.2)
-            end = start
+            a.axvspan(startt, endt, color = col, alpha = 0.2)
+            endt = startt
     #######################3
-    a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
+    a.set_xlim(start, end)
     return f,aa
 
 def plot_tower_vs_ground_down(data):
@@ -562,7 +599,10 @@ def plot_tower_vs_ground_down(data):
     ds_ground = data['ground']
     # ds_M1 = data['M1']
     stream = data['stream']
-    days = data['days']
+    start = data['start']
+    end = data['end']
+    if end is None:
+        end = pd.Timestamp.now(tz = 'UTC').tz_localize(None)
     f,aa = plt.subplots(8, sharex = True,height_ratios=[2,1,2,1,2,1,2,1], gridspec_kw={'hspace': 0})
     f.set_figheight(f.get_figheight() * 2)
     f.set_figwidth(f.get_figwidth() * 1.5)
@@ -577,7 +617,7 @@ def plot_tower_vs_ground_down(data):
     
     a.legend(title = 'down short global', fontsize = 'small', loc = 1)
     now = pd.Timestamp.now(tz = 'UTC')
-    a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
+    a.set_xlim(start, end)
     
     a = aa[1]
     (ds_tower['inst_down_short_hemisp' if 'a' in data['stream'] else 'down_short_hemisp'] / ds_ground['inst_down_short_hemisp' if 'a' in data['stream'] else 'down_short_hemisp']).plot(ax = a, label = 'tower', marker = '.', ls = '', markersize = mz_ratio)
@@ -622,7 +662,7 @@ def plot_tower_vs_ground_down(data):
     a.axhline(1, color = 'black', ls = '--', alpha = 0.5)
     #######################3
     now = pd.Timestamp.now(tz = 'UTC')
-    a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
+    a.set_xlim(start, end)
     return f,aa
     
 def plot_tower_vs_ground_up(data):
@@ -631,7 +671,11 @@ def plot_tower_vs_ground_up(data):
     ds_ground = data['ground']
     # ds_M1 = data['M1']
     stream = data['stream']
-    days = data['days']
+    start = data['start']
+    end = data['end']
+    if end is None:
+        end = pd.Timestamp.now(tz = 'UTC').tz_localize(None)
+        
     f,aa = plt.subplots(4, sharex = True,height_ratios=[2,1,2,1,
                                                         # 2,1,2,1
                                                        ], gridspec_kw={'hspace': 0})
@@ -647,7 +691,7 @@ def plot_tower_vs_ground_up(data):
     dst_ground.plot(ax = a, label = 'ground', ls = '--', lw = 1)
     a.legend(title = 'up short global', fontsize = 'small', loc = 1)
     now = pd.Timestamp.now(tz = 'UTC')
-    a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
+    a.set_xlim(start, end)
     
     a = aa[1]
     (dst_tower / dst_ground).plot(ax = a, label = 'tower', marker = '.', ls = '', markersize = mz_ratio)
@@ -671,7 +715,7 @@ def plot_tower_vs_ground_up(data):
     a.axhline(1, color = 'black', ls = '--', alpha = 0.5)
     #######################3
     now = pd.Timestamp.now(tz = 'UTC')
-    a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
+    a.set_xlim(start, end)
     return f,aa
 
 def plot_downwelling(data, days = None):
@@ -758,7 +802,10 @@ def plot_downwelling(data, days = None):
     #######################3
     # now = pd.Timestamp.now(tz = 'UTC')
     start = pd.to_datetime(data['start'])
-    end = pd.to_datetime(data['end']) + pd.to_timedelta(1, 'd')
+    if data['end'] is None:
+        end = pd.Timestamp.now(tz = 'UTC').tz_localize(None)
+    else:
+        end = pd.to_datetime(data['end']) + pd.to_timedelta(1, 'd')
     a.set_xlim(start, end)
     
     # for e,a in enumerate(aa):
@@ -790,6 +837,7 @@ def plot_shadowing_test(datab1):
         dst.down_short_direct_hemisp.plot(ax = a, label = start.date(), alpha = alpha)
         a = aa[2]
         (dst.down_short_hemisp - dst.down_short_hemisp_spn1).plot(ax = a, label = start.date(), alpha = alpha)
+        a.set_ylabel('SR20 - SPN1')
         start = end
     a.legend()
     return f,aa
@@ -830,7 +878,11 @@ def plot_upwelling(data):
     ds_ground = data['ground']
     ds_M1 = data['M1']
     stream = data['stream']
-    days = data['days']
+    # days = data['days']
+    end = data['end']
+    if end is None:
+        end = pd.Timestamp.now(tz = 'UTC').tz_localize(None)
+    start = data['start']
     f,aa = plt.subplots(4, sharex = True,height_ratios=[2,1,2,1,
                                                         # 2,1,2,1
                                                        ], gridspec_kw={'hspace': 0})
@@ -841,9 +893,8 @@ def plot_upwelling(data):
     # down short global
     a = aa[0]
     plot_upwelling_short_tower_vs_M1(data, ax = a)
-    now = pd.Timestamp.now(tz = 'UTC')
-    a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
-    
+    a.set_xlim(start, end)
+
     # 
     a = aa[1]
     (ds_tower['inst_up_short_hemisp' if 'a' in data['stream'] else 'up_short_hemisp'] / ds_M1.up_short_hemisp).plot(ax = a, label = 'tower', marker = '.', ls = '', markersize = mz_ratio)
@@ -865,7 +916,7 @@ def plot_upwelling(data):
     a.axhline(1, color = 'black', ls = '--', alpha = 0.5)
     #######################3
     now = pd.Timestamp.now(tz = 'UTC')
-    a.set_xlim(now - pd.to_timedelta(days, 'd'), now)
+    a.set_xlim(start,end)
     return f,aa
 
 def load_data(days = None, start = None, end = None, stream = 'b1', 
@@ -968,7 +1019,13 @@ def load_data(days = None, start = None, end = None, stream = 'b1',
         if verbose:
             print(f'loading tower files: {files_tower})')
         try:
-            ds = xr.open_mfdataset(files_tower, 
+            if stream == 'c1':
+                flist = []
+                for f in files_tower:
+                    flist.append(xr.open_datatree(f))
+                ds = xr.concat(flist, dim = 'time')
+            else:
+                ds = xr.open_mfdataset(files_tower, 
                                 combine="nested",
                                 concat_dim="time",  
                                 #    coords='minimal',
