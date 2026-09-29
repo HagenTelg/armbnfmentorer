@@ -76,8 +76,6 @@ class BnfRadsys43m60sS10C1Radflux(prowo.Workplanner):
         #######
         ds = self.open_p2f_in(row)
 
-        self.tp_ds = ds.copy()
-
         bbi_rename_dict = {'down_short_hemisp': 'global_horizontal',
                         'down_short_diffuse_hemisp': 'diffuse_horizontal',
                         'down_short_direct_hemisp': 'direct_horizontal',
@@ -413,7 +411,6 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
                 # '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
                 ]
         self.tp_bbi = bbi
-        self.tp_ds = bbi.dataset.copy()
         self.tp_dropvar = dropvar
 
         ds = bbi.dataset.drop_vars(dropvar)
@@ -560,7 +557,8 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
         for var in ds:
             if ds[var].dtype == np.float64:
                 ds[var] = ds[var].astype(np.float32)
-
+    
+        self.tp_ds = ds.copy()
         #######
         ## tree structure - optional?
         attrs = ds.attrs
@@ -624,13 +622,13 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
             "rh_mean_std",
 
             "clean_flag",
-        ]].drop_attrs()
+        ]].drop_attrs(deep = False)
 
         tree["clearsky"] = ds[[
             "mask_clear_sky_shortwave",
             "down_short_hemisp_clearsky",
             "down_short_diffuse_hemisp_clearsky",
-        ]].drop_attrs()
+        ]].drop_attrs(deep = False)
 
         tree["cloud"] = ds[[
             "shortwave_cloud_fraction",
@@ -638,21 +636,21 @@ class BnfRadsys43m60sS10C1(prowo.Workplanner):
             "direct_beam_transmittance",
             "direct_beam_cloud_effect",
             "direct_beam_state",
-        ]].drop_attrs()
+        ]].drop_attrs(deep = False)
 
         tree["diagnostics"] = ds[[
             "mask_normalized_global_magnitude",
             "mask_diffuse_magnitude",
             "mask_global_irradiance_temporal_gradient",
             "mask_normalized_diffuse_ratio_variability",
-        ]].drop_attrs()
+        ]].drop_attrs(deep = False)
 
         tree["solar"] = ds[[
             "solar_zenith",
             "solar_azimuth",
             "solar_airmass",
             "solar_sun_earth_distance",
-        ]].drop_attrs()
+        ]].drop_attrs(deep = False)
 
 
         tree["clearsky"]["mask_clear_sky_shortwave"].attrs["ancillary_variables"] = (
