@@ -21,7 +21,7 @@ import pandas as pd
 # import atmPy.radiation.radflux.lab as atmradflux
 
 def run(path_in = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.b1/',#'/Users/htelg/data/arm/archive/bnf/bnfradsys43m60sS10.b1/'
-        path_out = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1/{version}/',#'/Users/htelg/data/arm/vap/bnfradsys43m60sS10.c1/{version}/'
+        path_out = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1/{version}/final',#'/Users/htelg/data/arm/vap/bnfradsys43m60sS10.c1/{version}/'
         radflux_setting = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1/raflux_settings_0.1.toml',
         radflux_parameters_db = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1/radflux_0.2.db',
         log_folder="/home/grad/htelg/.processlogs/",
@@ -88,7 +88,7 @@ def main(argv=None):
     parser.add_argument(
         "--path-out",
         "--path_out",
-        default="/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1/{version}/",
+        default="/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1/{version}/final",
         help="Output folder template for generated C1 files.",
     )
     parser.add_argument(
