@@ -25,6 +25,9 @@ def run(log_folder='/home/grad/htelg/.processlogs/',
         # path_out = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1/{version}/',#'/Users/htelg/data/arm/vap/bnfradsys43m60sS10.c1/{version}/'
         path2raflux_setting = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1/raflux_settings_0.1.toml',
         radflux_parameters_db = '/nfs/stu3data2/bnf_radsys_data/bnfradsys43m60sS10.c1/radflux_{version}.db',
+        start=None,
+        end=None,
+        days=180, #
         reporter = None,
         test = False,
         verbose = False,
@@ -39,10 +42,12 @@ def run(log_folder='/home/grad/htelg/.processlogs/',
     worker = vap43.BnfRadsys43m60sS10C1Radflux(
             p2fld_in = path_in,
             path2raflux_setting = path2raflux_setting,
-            date_from_name = lambda name: pd.to_datetime(name.split('.')[2]),
+            file_name_format='*{date:%Y%m%d}*',    
+            # date_from_name = lambda name: pd.to_datetime(name.split('.')[2]),
             radflux_parameters_db=radflux_parameters_db,
-            start=None,
-            end=None,
+            start=start,
+            end=end,
+            days=days,
             reporter=reporter,
             verbose=verbose,
             )
@@ -52,7 +57,7 @@ def run(log_folder='/home/grad/htelg/.processlogs/',
         print(worker.workplan)
         return 
     worker.process(raise_errors = raise_errors)
-    reporter.wrapup()
+    reporter.wrapup(print_degster_report=True)
     return 
 
 
@@ -85,6 +90,14 @@ def main(argv=None):
         help='Path to the Radflux parameters database.',
     )
     parser.add_argument('--test', action='store_true') 
+    parser.add_argument('--start', help='Start date/time accepted by pandas.')
+    parser.add_argument('--end', help='End date/time accepted by pandas.')
+    parser.add_argument(
+        '--days',
+        type=int,
+        default=180,
+        help='Number of days before end to process when start is omitted.',
+    )
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument(
         '--raise-errors',

@@ -80,8 +80,10 @@ def run(prefix = '/nfs',
     else:
         vapi.process(raise_errors=raise_errors)
 
-    reporter.wrapup()
-    return vapi
+    reporter.wrapup(print_degster_report=True)
+    if test == 3:
+        return vapi
+    return 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(

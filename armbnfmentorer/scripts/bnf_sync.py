@@ -36,7 +36,7 @@ def run(log_folder='/home/grad/htelg/.processlogs/',):
     except:
         reporter.errors_increment()
 
-    reporter.wrapup()
+    reporter.wrapup(print_degster_report=True)
     return
 
 
